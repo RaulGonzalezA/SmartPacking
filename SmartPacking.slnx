@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SmartPacking.Api/SmartPacking.Api.csproj" />
+    <Project Path="src/SmartPacking.Application/SmartPacking.Application.csproj" />
+    <Project Path="src/SmartPacking.Domain/SmartPacking.Domain.csproj" />
+    <Project Path="src/SmartPacking.Infrastructure/SmartPacking.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SmartPacking.Application.Tests/SmartPacking.Application.Tests.csproj" />
+  </Folder>
+</Solution>

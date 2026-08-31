@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maleta Inteligente</title>
+  <link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">TU ARMARIO · TU VIAJE · TU MALETA</p>
+    <h1>Maleta Inteligente</h1>
+    <section class="hero"><div><p id="trip"></p><h2>Tu selección recomendada</h2><p>Con menos ropa y más conjuntos que realmente usarás.</p></div><div class="weather"><span>☀</span><strong id="temperature"></strong><small>Tiempo previsto</small></div></section>
+    <section class="controls"><label>Viaje activo<select id="trip-select"></select></label><button type="button" id="show-trip-form">Nuevo viaje</button><button type="button" id="show-clothing-form" class="secondary">Añadir prenda</button></section>
+    <p id="feedback" class="feedback" role="status" aria-live="polite" hidden></p>
+    <form id="trip-form" class="entry-form" hidden><h2>Planear un viaje</h2><label>Destino<input name="destination" required placeholder="Roma"></label><label>Salida<input name="startDate" type="date" required></label><label>Regreso<input name="endDate" type="date" required></label><label>Mínima °C<input name="minimumTemperatureCelsius" type="number" value="18" required></label><label>Máxima °C<input name="maximumTemperatureCelsius" type="number" value="28" required></label><button>Crear viaje</button></form>
+    <form id="clothing-form" class="entry-form" hidden><h2>Añadir al armario</h2><label>Nombre<input name="name" required placeholder="Camisa de lino azul"></label><label>Tipo<select name="type"><option value="0">Camiseta</option><option value="1">Pantalón</option><option value="2">Pantalón corto</option><option value="3">Chaqueta</option><option value="4">Zapatillas</option><option value="5">Sandalias</option><option value="6">Accesorio</option></select></label><label>Temporada<select name="season"><option value="0">Verano</option><option value="1">Invierno</option><option value="2">Entretiempo</option><option value="3">Todo el año</option></select></label><label>Color<input name="color" required></label><label>Grado de abrigo (1–10)<input name="warmthLevel" type="number" value="2" min="1" max="10" required></label><label>Peso en gramos<input name="weightGrams" type="number" value="150" min="0"></label><button>Añadir prenda</button></form>
+    <section class="wardrobe"><div class="section-heading"><h2>Mi armario</h2><span id="wardrobe-count"></span></div><div id="wardrobe-items" class="wardrobe-items"></div></section>
+    <section class="summary"><div><b id="items">–</b><span>prendas</span></div><div><b id="weight">–</b><span>peso estimado</span></div><div><b id="outfits">–</b><span>combinaciones</span></div></section>
+    <section><div class="section-heading"><h2>Preparar la maleta</h2><button id="pack-all">Marcar todo</button></div><div id="recommendations" class="cards"></div></section>
+  </main>
+  <template id="item-template"><article class="card"><label><input type="checkbox"><span class="check"></span></label><div><p class="type"></p><h3></h3><p class="reason"></p></div><div class="score"><b></b><span>/100</span></div></article></template>
+  <template id="wardrobe-template"><article class="wardrobe-item"><div><strong></strong><span class="wardrobe-meta"></span></div><label><input class="clean" type="checkbox"> Limpia</label><label><input class="available" type="checkbox"> Disponible</label></article></template>
+  <script type="module" src="app.js?v=2"></script>
+</body>
+</html>
