@@ -33,6 +33,7 @@
             </EditForm>
         }
         <section class="family-section"><h2>Viajeros</h2><p class="muted">Cada viajero conserva su propia maleta.</p>
+            <div class="quick-form"><label>Nuevo viajero <InputText @bind-Value="newTravellerName" placeholder="Nombre" /></label><button @onclick="AddTravellerAsync">Añadir viajero</button></div>
             <div class="profile-items">@foreach (var profile in profiles) { <label class="profile-item"><input type="checkbox" checked="@tripProfileIds.Contains(profile.Id)" @onchange="args => SetTraveller(profile.Id, args.Value)" /> @profile.Name</label> }</div>
             <button @onclick="SaveTravellersAsync">Guardar viajeros</button>
         </section>
@@ -73,6 +74,7 @@
     private Guid selectedProfileId;
     private string activeTab = "trips";
     private string? feedback;
+    private string newTravellerName = string.Empty;
     private bool showTripForm;
     private bool showClothingForm;
     private HashSet<Guid> tripProfileIds = [];
@@ -95,6 +97,26 @@
     private async Task CreateTripAsync() { await Api.CreateTripAsync(newTrip.Destination, newTrip.StartDate, newTrip.EndDate, newTrip.MinimumTemperatureCelsius, newTrip.MaximumTemperatureCelsius, CancellationToken.None); showTripForm = false; feedback = "Viaje creado."; await LoadAsync(); }
     private async Task DeleteTripAsync() { await Api.DeleteTripAsync(selectedTripId, CancellationToken.None); selectedTripId = Guid.Empty; feedback = "Viaje eliminado."; await LoadAsync(); }
     private void SetTraveller(Guid profileId, object? value) { if (value is bool selected && selected) tripProfileIds.Add(profileId); else tripProfileIds.Remove(profileId); }
+    private async Task AddTravellerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newTravellerName))
+        {
+            feedback = "Escribe el nombre del viajero.";
+            return;
+        }
+
+        var profile = await Api.CreateProfileAsync(newTravellerName.Trim(), CancellationToken.None);
+        profiles = [.. profiles, profile];
+        tripProfileIds.Add(profile.Id);
+        newTravellerName = string.Empty;
+        if (selectedTripId != Guid.Empty)
+        {
+            await Api.SetTripProfilesAsync(selectedTripId, tripProfileIds, CancellationToken.None);
+            await LoadTripAsync();
+        }
+
+        feedback = $"{profile.Name} se ha añadido como viajero.";
+    }
     private async Task SaveTravellersAsync() { await Api.SetTripProfilesAsync(selectedTripId, tripProfileIds, CancellationToken.None); feedback = "Viajeros guardados."; await LoadTripAsync(); }
     private async Task CreateClothingAsync() { await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), newClothing.Name, ClothingType.TShirt, Season.AllYear, newClothing.Color, 2, false, Style.Casual, 150, true, true, 70, [], false, newClothing.OwnerProfileId), CancellationToken.None); showClothingForm = false; feedback = "Prenda guardada."; await LoadAsync(); }
     private async Task UpdateStatusAsync(ClothingItem item, object? cleanValue, object? availableValue)

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.DataProtection;
-using SmartPacking.Api.Components;
 using SmartPacking.Application;
 using SmartPacking.Web;
+using SmartPacking.Api.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();

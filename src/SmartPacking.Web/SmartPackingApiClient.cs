@@ -13,6 +13,13 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
     public async Task<IReadOnlyList<FamilyProfile>> GetProfilesAsync(CancellationToken cancellationToken) =>
         await httpClient.GetFromJsonAsync<FamilyProfile[]>("api/profiles", cancellationToken) ?? [];
 
+    public async Task<FamilyProfile> CreateProfileAsync(string name, CancellationToken cancellationToken)
+    {
+        var response = await httpClient.PostAsJsonAsync("api/profiles", new { name }, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<FamilyProfile>(cancellationToken) ?? throw new InvalidOperationException("La API no devolvió el viajero creado.");
+    }
+
     public async Task<IReadOnlyList<FamilyProfile>> GetTripProfilesAsync(Guid tripId, CancellationToken cancellationToken) =>
         await httpClient.GetFromJsonAsync<FamilyProfile[]>($"api/trips/{tripId}/profiles", cancellationToken) ?? [];
 
@@ -42,8 +49,19 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
     {
         var response = await httpClient.PostAsJsonAsync("api/wardrobe", new
         {
-            item.Name, item.Type, item.Season, item.Color, item.WarmthLevel, item.Waterproof, item.Style, item.WeightGrams,
-            item.IsClean, item.IsAvailable, item.PreferenceScore, item.CombinesWith, item.OwnerProfileId
+            item.Name,
+            item.Type,
+            item.Season,
+            item.Color,
+            item.WarmthLevel,
+            item.Waterproof,
+            item.Style,
+            item.WeightGrams,
+            item.IsClean,
+            item.IsAvailable,
+            item.PreferenceScore,
+            item.CombinesWith,
+            item.OwnerProfileId
         }, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
