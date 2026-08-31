@@ -20,10 +20,15 @@ public sealed class PackingListService(ISmartPackingStore store, PackingRecommen
                     recommendation.Items.Select(item => new PackingListItem(item.Item.Id, false)).ToArray()),
                 cancellationToken);
 
-        var packedByItem = packingList.Items.ToDictionary(item => item.ClothingItemId, item => item.IsPacked);
-        var items = recommendation.Items
-            .Select(item => new PlannedItem(item, packedByItem.GetValueOrDefault(item.Item.Id)))
+        var recommendationByItem = recommendation.Items.ToDictionary(item => item.Item.Id);
+        var wardrobeByItem = wardrobe.ToDictionary(item => item.Id);
+        var items = packingList.Items
+            .Where(item => wardrobeByItem.ContainsKey(item.ClothingItemId))
+            .Select(item => new PlannedItem(
+                recommendationByItem.GetValueOrDefault(item.ClothingItemId)
+                    ?? new RecommendedItem(wardrobeByItem[item.ClothingItemId], 0, ["retirada del armario; se conserva por ser una maleta existente"]),
+                item.IsPacked))
             .ToArray();
-        return new TripPackingPlan(trip, packingList.Id, items, recommendation.TotalWeightGrams);
+        return new TripPackingPlan(trip, packingList.Id, items, items.Sum(item => item.Recommendation.Item.WeightGrams ?? 0));
     }
 }

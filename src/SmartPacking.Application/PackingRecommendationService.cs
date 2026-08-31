@@ -9,7 +9,7 @@ public sealed class PackingRecommendationService
 {
     public PackingRecommendation Recommend(Trip trip, IEnumerable<ClothingItem> wardrobe)
     {
-        var availableItems = wardrobe.Where(item => item.IsClean && item.IsAvailable).ToArray();
+        var availableItems = wardrobe.Where(item => !item.IsDeleted && item.IsClean && item.IsAvailable).ToArray();
         var selected = new List<RecommendedItem>();
 
         foreach (var type in RequiredTypes(trip, availableItems))

@@ -26,4 +26,17 @@ public sealed class PackingRecommendationServiceTests
         result.Items.Select(item => item.Item.Type).Should().Contain([ClothingType.Shorts, ClothingType.Sandals]);
         result.TotalWeightGrams.Should().BeGreaterThan(0);
     }
+
+    [Fact]
+    public void Recommend_ForFormalActivity_PrefersFormalTrousers()
+    {
+        var formalTrousers = DemoData.Wardrobe.Single(item => item.Type == ClothingType.Trousers) with { Style = Style.Formal, PreferenceScore = 70, CombinesWith = [] };
+        var casualTrousers = formalTrousers with { Id = Guid.NewGuid(), Name = "Pantalón casual", Style = Style.Casual };
+        var wardrobe = DemoData.Wardrobe.Where(item => item.Type != ClothingType.Trousers).Append(formalTrousers).Append(casualTrousers);
+        var trip = DemoData.RomeTrip with { Activities = [Style.Formal] };
+
+        var result = new PackingRecommendationService().Recommend(trip, wardrobe);
+
+        result.Items.Where(item => item.Item.Type == ClothingType.Trousers).First().Item.Style.Should().Be(Style.Formal);
+    }
 }
