@@ -3,3 +3,4 @@
 **/obj/
 src/SmartPacking.Api/smartpacking.db*
 src/SmartPacking.Api/wwwroot/uploads/
+src/SmartPacking.Web/data-protection-keys/

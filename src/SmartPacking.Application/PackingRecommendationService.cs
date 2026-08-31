@@ -35,10 +35,21 @@ public static class PackingRecommendationService
     {
         yield return ClothingType.TShirt;
         yield return ClothingType.Trousers;
-        if (trip.MaximumTemperatureCelsius >= 24 && wardrobe.Any(item => item.Type == ClothingType.Shorts)) yield return ClothingType.Shorts;
-        if (trip.MaximumTemperatureCelsius >= 18 && wardrobe.Any(item => item.Type == ClothingType.Sandals)) yield return ClothingType.Sandals;
+        if (trip.MaximumTemperatureCelsius >= 24 && wardrobe.Any(item => item.Type == ClothingType.Shorts))
+        {
+            yield return ClothingType.Shorts;
+        }
+
+        if (trip.MaximumTemperatureCelsius >= 18 && wardrobe.Any(item => item.Type == ClothingType.Sandals))
+        {
+            yield return ClothingType.Sandals;
+        }
+
         yield return ClothingType.Shoes;
-        if (trip.MinimumTemperatureCelsius < 18 && wardrobe.Any(item => item.Type == ClothingType.Jacket)) yield return ClothingType.Jacket;
+        if (trip.MinimumTemperatureCelsius < 18 && wardrobe.Any(item => item.Type == ClothingType.Jacket))
+        {
+            yield return ClothingType.Jacket;
+        }
     }
 
     private static int NumberToPack(ClothingType type, Trip trip) => type switch
@@ -55,19 +66,41 @@ public static class PackingRecommendationService
         var combination = wardrobe.Count(other => item.CombinesWith.Contains(other.Id)) * 20;
         var score = weather * .30m + 100m * .20m + Math.Min(combination, 100) * .20m + activity * .20m + item.PreferenceScore * .10m;
         var reasons = new List<string>();
-        if (weather >= 80) reasons.Add("adecuada para el tiempo previsto");
-        if (activity >= 100) reasons.Add("encaja con las actividades del viaje");
-        if (combination > 0) reasons.Add($"combina con {combination / 20} prendas de tu armario");
-        if (item.PreferenceScore >= 80) reasons.Add("es una de tus prendas preferidas");
+        if (weather >= 80)
+        {
+            reasons.Add("adecuada para el tiempo previsto");
+        }
+
+        if (activity >= 100)
+        {
+            reasons.Add("encaja con las actividades del viaje");
+        }
+
+        if (combination > 0)
+        {
+            reasons.Add($"combina con {combination / 20} prendas de tu armario");
+        }
+
+        if (item.PreferenceScore >= 80)
+        {
+            reasons.Add("es una de tus prendas preferidas");
+        }
+
         return new RecommendedItem(item, decimal.Round(score, 1), reasons);
     }
 
     private static decimal WeatherScore(ClothingItem item, Trip trip)
     {
         if (trip.MaximumTemperatureCelsius >= 28)
+        {
             return item.Season is Season.Summer or Season.AllYear && item.WarmthLevel <= 3 ? 100 : 35;
+        }
+
         if (trip.MinimumTemperatureCelsius <= 12)
+        {
             return item.Season is Season.Winter or Season.AllYear && item.WarmthLevel >= 5 ? 100 : 35;
+        }
+
         return item.Season is Season.MidSeason or Season.AllYear ? 100 : 70;
     }
 }

@@ -10,7 +10,10 @@ public sealed class PackingListService(ISmartPackingStore store)
     public async Task<TripPackingPlan?> GetOrCreateAsync(Guid userId, Guid tripId, CancellationToken cancellationToken)
     {
         var trip = await store.GetTripAsync(userId, tripId, cancellationToken);
-        if (trip is null) return null;
+        if (trip is null)
+        {
+            return null;
+        }
 
         var wardrobe = await store.GetWardrobeAsync(userId, cancellationToken);
         var recommendation = PackingRecommendationService.Recommend(trip, wardrobe);

@@ -1,0 +1,17 @@
+[
+  {
+    "Name": "Nuevo perfil",
+    "Projects": [
+      {
+        "Path": "src\\SmartPacking.Api\\SmartPacking.Api.csproj",
+        "Action": "Start",
+        "DebugTarget": "SmartPacking.Api"
+      },
+      {
+        "Path": "src\\SmartPacking.Web\\SmartPacking.Web.csproj",
+        "Action": "Start",
+        "DebugTarget": "SmartPacking.Web"
+      }
+    ]
+  }
+]

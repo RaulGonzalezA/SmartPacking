@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\SmartPacking.Application\SmartPacking.Application.csproj" />
+    <ProjectReference Include="..\SmartPacking.Contracts\SmartPacking.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <RazorComponent Include="..\SmartPacking.Api\Components\**\*.razor" Link="Components\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SmartPacking.Api</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>

@@ -10,7 +10,10 @@ public sealed class ProfilePackingListService(ISmartPackingStore store)
     {
         var profile = (await store.GetTripProfilesAsync(userId, tripId, cancellationToken)).SingleOrDefault(item => item.Id == profileId);
         var trip = await store.GetTripAsync(userId, tripId, cancellationToken);
-        if (profile is null || trip is null) return null;
+        if (profile is null || trip is null)
+        {
+            return null;
+        }
 
         var wardrobe = (await store.GetWardrobeAsync(userId, cancellationToken)).Where(item => item.OwnerProfileId is null || item.OwnerProfileId == profileId).ToArray();
         var recommendation = PackingRecommendationService.Recommend(trip, wardrobe);

@@ -1,51 +1,83 @@
-name: CI and release
+name: CI Release
 
 on:
   pull_request:
+    branches: [main]
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ["v*"]
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
-  verify:
-    name: Build and test
+  validate:
+    name: Validate .NET 10
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: true
+      NUGET_XMLDOC_MODE: skip
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
-      - run: dotnet restore SmartPacking.slnx
-      - run: dotnet build SmartPacking.slnx --configuration Release --no-restore
-      - run: dotnet test SmartPacking.slnx --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
-      - uses: actions/upload-artifact@v4
+
+      - name: Restore
+        run: dotnet restore SmartPacking.slnx
+
+      - name: Build Release
+        run: dotnet build SmartPacking.slnx --configuration Release --no-restore
+
+      - name: Verify formatting
+        run: dotnet format SmartPacking.slnx --verify-no-changes --no-restore
+
+      - name: Test Release
+        run: >-
+          dotnet test SmartPacking.slnx --configuration Release
+          --no-build --no-restore
+          --logger "trx;LogFileName=tests.trx"
+          --results-directory artifacts/test-results
+
+      - name: Publish web host
+        run: >-
+          dotnet publish src/SmartPacking.Api/SmartPacking.Api.csproj
+          --configuration Release --no-build --no-restore
+          --output artifacts/publish/web
+
+      - name: Upload validation artifacts
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: '**/TestResults/*.trx'
-          if-no-files-found: ignore
+          name: smartpacking-${{ github.sha }}
+          path: artifacts
+          if-no-files-found: warn
+          retention-days: 14
 
   release:
-    name: Publish release artifact
-    needs: verify
+    name: Create GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Download published artifacts
+        uses: actions/download-artifact@v4
         with:
-          global-json-file: global.json
-      - run: dotnet publish src/SmartPacking.Api/SmartPacking.Api.csproj --configuration Release --no-restore --output publish
-      - uses: actions/upload-artifact@v4
-        with:
-          name: smartpacking-${{ github.ref_name }}
-          path: publish
-      - uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: publish/**
+          name: smartpacking-${{ github.sha }}
+          path: artifacts
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          tar -czf smartpacking-web.tar.gz -C artifacts/publish/web .
+          gh release create "$TAG_NAME" smartpacking-web.tar.gz --title "$TAG_NAME" --generate-notes

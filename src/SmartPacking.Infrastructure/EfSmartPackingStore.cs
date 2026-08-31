@@ -11,19 +11,6 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
 
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
-        await dbContext.Database.EnsureCreatedAsync(cancellationToken);
-        try { await dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE ClothingItems ADD COLUMN IsDeleted INTEGER NOT NULL DEFAULT 0", cancellationToken); }
-        catch (Microsoft.Data.Sqlite.SqliteException) { /* Existing local databases already have this column. */ }
-        try { await dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE ClothingItems ADD COLUMN OwnerProfileId TEXT NULL", cancellationToken); }
-        catch (Microsoft.Data.Sqlite.SqliteException) { /* Existing local databases already have this column. */ }
-        await dbContext.Database.ExecuteSqlAsync($"UPDATE ClothingItems SET OwnerProfileId = {DefaultUserId} WHERE OwnerProfileId IS NULL", cancellationToken);
-        await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS ChecklistItems (Id TEXT NOT NULL PRIMARY KEY, UserId TEXT NOT NULL, TripId TEXT NOT NULL, Category INTEGER NOT NULL, Name TEXT NOT NULL, IsPacked INTEGER NOT NULL)", cancellationToken);
-        await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS ClothingUsage (TripId TEXT NOT NULL, ClothingItemId TEXT NOT NULL, UserId TEXT NOT NULL, WasUsed INTEGER NOT NULL, PRIMARY KEY (TripId, ClothingItemId))", cancellationToken);
-        await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS FamilyProfiles (Id TEXT NOT NULL PRIMARY KEY, UserId TEXT NOT NULL, Name TEXT NOT NULL)", cancellationToken);
-        await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS TripProfiles (TripId TEXT NOT NULL, ProfileId TEXT NOT NULL, UserId TEXT NOT NULL, PRIMARY KEY (TripId, ProfileId))", cancellationToken);
-        await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS ProfilePackingLists (Id TEXT NOT NULL PRIMARY KEY, TripId TEXT NOT NULL, ProfileId TEXT NOT NULL, UserId TEXT NOT NULL, CreatedAt TEXT NOT NULL)", cancellationToken);
-        await dbContext.Database.ExecuteSqlRawAsync("CREATE UNIQUE INDEX IF NOT EXISTS IX_ProfilePackingLists_UserId_TripId_ProfileId ON ProfilePackingLists (UserId, TripId, ProfileId)", cancellationToken);
-        await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS ProfilePackingListItems (PackingListId TEXT NOT NULL, ClothingItemId TEXT NOT NULL, IsPacked INTEGER NOT NULL, PRIMARY KEY (PackingListId, ClothingItemId))", cancellationToken);
         if (await dbContext.Users.AnyAsync(cancellationToken))
         {
             if (!await dbContext.FamilyProfiles.AnyAsync(profile => profile.UserId == DefaultUserId, cancellationToken))
@@ -88,7 +75,10 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task<bool> DeleteClothingItemAsync(Guid userId, Guid clothingItemId, CancellationToken cancellationToken)
     {
         var item = await dbContext.ClothingItems.SingleOrDefaultAsync(candidate => candidate.UserId == userId && candidate.Id == clothingItemId, cancellationToken);
-        if (item is null) return false;
+        if (item is null)
+        {
+            return false;
+        }
 
         item.IsDeleted = true;
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -98,7 +88,11 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task<bool> RestoreClothingItemAsync(Guid userId, Guid clothingItemId, CancellationToken cancellationToken)
     {
         var item = await dbContext.ClothingItems.SingleOrDefaultAsync(candidate => candidate.UserId == userId && candidate.Id == clothingItemId && candidate.IsDeleted, cancellationToken);
-        if (item is null) return false;
+        if (item is null)
+        {
+            return false;
+        }
+
         item.IsDeleted = false;
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
@@ -107,7 +101,10 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task<ClothingItem?> UpdateClothingItemAsync(Guid userId, ClothingItem item, CancellationToken cancellationToken)
     {
         var entity = await dbContext.ClothingItems.SingleOrDefaultAsync(candidate => candidate.UserId == userId && candidate.Id == item.Id, cancellationToken);
-        if (entity is null) return null;
+        if (entity is null)
+        {
+            return null;
+        }
 
         entity.Name = item.Name;
         entity.Type = (int)item.Type;
@@ -130,7 +127,10 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task<bool> UpdateClothingStatusAsync(Guid userId, Guid clothingItemId, bool isClean, bool isAvailable, CancellationToken cancellationToken)
     {
         var item = await dbContext.ClothingItems.SingleOrDefaultAsync(item => item.UserId == userId && item.Id == clothingItemId, cancellationToken);
-        if (item is null) return false;
+        if (item is null)
+        {
+            return false;
+        }
 
         item.IsClean = isClean;
         item.IsAvailable = isAvailable;
@@ -152,7 +152,10 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task<bool> DeleteTripAsync(Guid userId, Guid tripId, CancellationToken cancellationToken)
     {
         var trip = await dbContext.Trips.SingleOrDefaultAsync(candidate => candidate.UserId == userId && candidate.Id == tripId, cancellationToken);
-        if (trip is null) return false;
+        if (trip is null)
+        {
+            return false;
+        }
 
         var lists = await dbContext.PackingLists.Where(list => list.UserId == userId && list.TripId == tripId).Select(list => list.Id).ToListAsync(cancellationToken);
         var profileLists = await dbContext.ProfilePackingLists.Where(list => list.UserId == userId && list.TripId == tripId).Select(list => list.Id).ToListAsync(cancellationToken);
@@ -177,7 +180,11 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task<PackingList?> GetPackingListAsync(Guid userId, Guid tripId, CancellationToken cancellationToken)
     {
         var list = await dbContext.PackingLists.SingleOrDefaultAsync(item => item.UserId == userId && item.TripId == tripId, cancellationToken);
-        if (list is null) return null;
+        if (list is null)
+        {
+            return null;
+        }
+
         var items = await dbContext.PackingListItems.Where(item => item.PackingListId == list.Id).Select(item => new PackingListItem(item.ClothingItemId, item.IsPacked)).ToListAsync(cancellationToken);
         return new PackingList(list.Id, list.TripId, list.UserId, list.CreatedAt, items);
     }
@@ -193,9 +200,17 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task SetPackedAsync(Guid userId, Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken)
     {
         var belongsToUser = await dbContext.PackingLists.AnyAsync(list => list.Id == packingListId && list.UserId == userId, cancellationToken);
-        if (!belongsToUser) return;
+        if (!belongsToUser)
+        {
+            return;
+        }
+
         var item = await dbContext.PackingListItems.SingleOrDefaultAsync(entry => entry.PackingListId == packingListId && entry.ClothingItemId == clothingItemId, cancellationToken);
-        if (item is null) return;
+        if (item is null)
+        {
+            return;
+        }
+
         item.IsPacked = isPacked;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -203,7 +218,11 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task<ProfilePackingList?> GetProfilePackingListAsync(Guid userId, Guid tripId, Guid profileId, CancellationToken cancellationToken)
     {
         var list = await dbContext.ProfilePackingLists.SingleOrDefaultAsync(item => item.UserId == userId && item.TripId == tripId && item.ProfileId == profileId, cancellationToken);
-        if (list is null) return null;
+        if (list is null)
+        {
+            return null;
+        }
+
         var items = await dbContext.ProfilePackingListItems.Where(item => item.PackingListId == list.Id).Select(item => new PackingListItem(item.ClothingItemId, item.IsPacked)).ToListAsync(cancellationToken);
         return new ProfilePackingList(list.Id, list.TripId, list.ProfileId, list.UserId, list.CreatedAt, items);
     }
@@ -219,9 +238,17 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task SetProfilePackedAsync(Guid userId, Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken)
     {
         var belongsToUser = await dbContext.ProfilePackingLists.AnyAsync(list => list.Id == packingListId && list.UserId == userId, cancellationToken);
-        if (!belongsToUser) return;
+        if (!belongsToUser)
+        {
+            return;
+        }
+
         var item = await dbContext.ProfilePackingListItems.SingleOrDefaultAsync(entry => entry.PackingListId == packingListId && entry.ClothingItemId == clothingItemId, cancellationToken);
-        if (item is null) return;
+        if (item is null)
+        {
+            return;
+        }
+
         item.IsPacked = isPacked;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -237,7 +264,11 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     public async Task SetChecklistPackedAsync(Guid userId, Guid checklistItemId, bool isPacked, CancellationToken cancellationToken)
     {
         var item = await dbContext.ChecklistItems.SingleOrDefaultAsync(item => item.UserId == userId && item.Id == checklistItemId, cancellationToken);
-        if (item is null) return;
+        if (item is null)
+        {
+            return;
+        }
+
         item.IsPacked = isPacked;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
@@ -249,9 +280,22 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
 #pragma warning disable S4136 // Entity/domain conversions remain grouped by their related type.
     private static ClothingItemEntity ToEntity(Guid userId, ClothingItem item) => new()
     {
-        Id = item.Id, UserId = userId, Name = item.Name, Type = (int)item.Type, Season = (int)item.Season, Color = item.Color,
-        WarmthLevel = item.WarmthLevel, Waterproof = item.Waterproof, Style = (int)item.Style, WeightGrams = item.WeightGrams,
-        IsClean = item.IsClean, IsAvailable = item.IsAvailable, PreferenceScore = item.PreferenceScore, IsDeleted = item.IsDeleted, OwnerProfileId = item.OwnerProfileId, CombinationIds = JsonSerializer.Serialize(item.CombinesWith)
+        Id = item.Id,
+        UserId = userId,
+        Name = item.Name,
+        Type = (int)item.Type,
+        Season = (int)item.Season,
+        Color = item.Color,
+        WarmthLevel = item.WarmthLevel,
+        Waterproof = item.Waterproof,
+        Style = (int)item.Style,
+        WeightGrams = item.WeightGrams,
+        IsClean = item.IsClean,
+        IsAvailable = item.IsAvailable,
+        PreferenceScore = item.PreferenceScore,
+        IsDeleted = item.IsDeleted,
+        OwnerProfileId = item.OwnerProfileId,
+        CombinationIds = JsonSerializer.Serialize(item.CombinesWith)
     };
     private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId);
     private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities) };
