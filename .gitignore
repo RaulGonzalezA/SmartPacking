@@ -1,0 +1,15 @@
+﻿################################################################################
+# Este archivo .gitignore ha sido creado automáticamente por Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs
+/src/SmartPacking.Api/bin
+/src/SmartPacking.Api/obj
+/src/SmartPacking.Application/obj
+/src/SmartPacking.Application/bin
+/src/SmartPacking.Domain/bin
+/src/SmartPacking.Domain/obj
+/src/SmartPacking.Infrastructure/bin
+/src/SmartPacking.Infrastructure/obj
+/tests/SmartPacking.Application.Tests/bin
+/tests/SmartPacking.Application.Tests/obj
