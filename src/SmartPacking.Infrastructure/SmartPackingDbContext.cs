@@ -21,14 +21,21 @@ public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext
         modelBuilder.Entity<UserEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<ClothingItemEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.Name }).IsUnique();
+        modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.IsDeleted });
+        modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.OwnerProfileId });
         modelBuilder.Entity<TripEntity>().HasKey(entity => entity.Id);
+        modelBuilder.Entity<TripEntity>().HasIndex(entity => new { entity.UserId, entity.StartDate });
         modelBuilder.Entity<PackingListEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<PackingListEntity>().HasIndex(entity => new { entity.UserId, entity.TripId }).IsUnique();
         modelBuilder.Entity<PackingListItemEntity>().HasKey(entity => new { entity.PackingListId, entity.ClothingItemId });
         modelBuilder.Entity<ChecklistItemEntity>().HasKey(entity => entity.Id);
+        modelBuilder.Entity<ChecklistItemEntity>().HasIndex(entity => new { entity.UserId, entity.TripId });
         modelBuilder.Entity<ClothingUsageEntity>().HasKey(entity => new { entity.TripId, entity.ClothingItemId });
         modelBuilder.Entity<FamilyProfileEntity>().HasKey(entity => entity.Id);
+        modelBuilder.Entity<FamilyProfileEntity>().HasIndex(entity => new { entity.UserId, entity.Name }).IsUnique();
+        modelBuilder.Entity<FamilyProfileEntity>().HasIndex(entity => new { entity.UserId, entity.IsArchived });
         modelBuilder.Entity<TripProfileEntity>().HasKey(entity => new { entity.TripId, entity.ProfileId });
+        modelBuilder.Entity<TripProfileEntity>().HasIndex(entity => new { entity.UserId, entity.TripId });
         modelBuilder.Entity<ProfilePackingListEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<ProfilePackingListEntity>().HasIndex(entity => new { entity.UserId, entity.TripId, entity.ProfileId }).IsUnique();
         modelBuilder.Entity<ProfilePackingListItemEntity>().HasKey(entity => new { entity.PackingListId, entity.ClothingItemId });
@@ -65,12 +72,15 @@ public sealed class TripEntity
     public int MinimumTemperatureCelsius { get; set; }
     public int MaximumTemperatureCelsius { get; set; }
     public string Activities { get; set; } = "[]";
+    public string? TemplateKey { get; set; }
+    public int LuggageAllowanceGrams { get; set; } = 10000;
+    public bool CabinOnly { get; set; } = true;
 }
 public sealed class PackingListEntity { public Guid Id { get; set; } public Guid TripId { get; set; } public Guid UserId { get; set; } public DateTimeOffset CreatedAt { get; set; } }
 public sealed class PackingListItemEntity { public Guid PackingListId { get; set; } public Guid ClothingItemId { get; set; } public bool IsPacked { get; set; } }
 public sealed class ChecklistItemEntity { public Guid Id { get; set; } public Guid UserId { get; set; } public Guid TripId { get; set; } public int Category { get; set; } public string Name { get; set; } = string.Empty; public bool IsPacked { get; set; } }
 public sealed class ClothingUsageEntity { public Guid TripId { get; set; } public Guid ClothingItemId { get; set; } public Guid UserId { get; set; } public bool WasUsed { get; set; } }
-public sealed class FamilyProfileEntity { public Guid Id { get; set; } public Guid UserId { get; set; } public string Name { get; set; } = string.Empty; }
+public sealed class FamilyProfileEntity { public Guid Id { get; set; } public Guid UserId { get; set; } public string Name { get; set; } = string.Empty; public bool IsArchived { get; set; } }
 public sealed class TripProfileEntity { public Guid TripId { get; set; } public Guid ProfileId { get; set; } public Guid UserId { get; set; } }
 public sealed class ProfilePackingListEntity { public Guid Id { get; set; } public Guid TripId { get; set; } public Guid ProfileId { get; set; } public Guid UserId { get; set; } public DateTimeOffset CreatedAt { get; set; } }
 public sealed class ProfilePackingListItemEntity { public Guid PackingListId { get; set; } public Guid ClothingItemId { get; set; } public bool IsPacked { get; set; } }

@@ -20,6 +20,12 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
         return await response.Content.ReadFromJsonAsync<FamilyProfile>(cancellationToken) ?? throw new InvalidOperationException("La API no devolvió el viajero creado.");
     }
 
+    public async Task UpdateProfileAsync(Guid profileId, string name, CancellationToken cancellationToken) =>
+        await EnsureSuccessAsync(await httpClient.PutAsJsonAsync($"api/profiles/{profileId}", new { name }, cancellationToken));
+
+    public async Task ArchiveProfileAsync(Guid profileId, CancellationToken cancellationToken) =>
+        await EnsureSuccessAsync(await httpClient.DeleteAsync($"api/profiles/{profileId}", cancellationToken));
+
     public async Task<IReadOnlyList<FamilyProfile>> GetTripProfilesAsync(Guid tripId, CancellationToken cancellationToken) =>
         await httpClient.GetFromJsonAsync<FamilyProfile[]>($"api/trips/{tripId}/profiles", cancellationToken) ?? [];
 
@@ -33,9 +39,30 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
     public async Task<ProfileTripPackingPlan?> GetProfilePackingListAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken) =>
         await httpClient.GetFromJsonAsync<ProfileTripPackingPlan>($"api/trips/{tripId}/profiles/{profileId}/packing-list", cancellationToken);
 
-    public async Task CreateTripAsync(string destination, DateOnly startDate, DateOnly endDate, int minimumTemperatureCelsius, int maximumTemperatureCelsius, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<TripTemplate>> GetTripTemplatesAsync(CancellationToken cancellationToken) =>
+        await httpClient.GetFromJsonAsync<TripTemplate[]>("api/trips/templates", cancellationToken) ?? [];
+
+    public async Task<TripWeatherForecast?> GetWeatherAsync(Guid tripId, CancellationToken cancellationToken)
     {
-        var response = await httpClient.PostAsJsonAsync("api/trips", new { destination, startDate, endDate, minimumTemperatureCelsius, maximumTemperatureCelsius, activities = new[] { Style.Casual } }, cancellationToken);
+        try
+        {
+            using var response = await httpClient.GetAsync($"api/trips/{tripId}/weather", cancellationToken);
+            response.EnsureSuccessStatusCode();
+            var weather = await response.Content.ReadFromJsonAsync<WeatherForecastDto>(cancellationToken);
+            return weather is null ? null : new TripWeatherForecast(weather.Destination, weather.MinimumCelsius, weather.MaximumCelsius, weather.RainProbability, weather.StartDate, weather.EndDate, weather.Daily.Select(day => new DailyTripForecast(day.Date, day.MinimumCelsius, day.MaximumCelsius, day.RainProbability)).ToArray());
+        }
+        catch (ApiProblemException exception) when (exception.StatusCode == StatusCodes.Status404NotFound)
+        {
+            return null;
+        }
+    }
+
+    public async Task<LuggageRulesSummary?> GetLuggageRulesAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken) =>
+        await httpClient.GetFromJsonAsync<LuggageRulesSummary>($"api/trips/{tripId}/profiles/{profileId}/luggage-rules", cancellationToken);
+
+    public async Task CreateTripAsync(string destination, DateOnly startDate, DateOnly endDate, int minimumTemperatureCelsius, int maximumTemperatureCelsius, string? templateKey, int luggageAllowanceGrams, bool cabinOnly, CancellationToken cancellationToken)
+    {
+        var response = await httpClient.PostAsJsonAsync("api/trips", new { destination, startDate, endDate, minimumTemperatureCelsius, maximumTemperatureCelsius, activities = new[] { Style.Casual }, templateKey, luggageAllowanceGrams, cabinOnly }, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
 
@@ -88,4 +115,7 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
     {
         public ClothingItem ToDomain() => new(Id, Name, Type, Season, Color, WarmthLevel, Waterproof, Style, WeightGrams, IsClean, IsAvailable, PreferenceScore, CombinesWith, IsDeleted, OwnerProfileId);
     }
+
+    private sealed record WeatherForecastDto(string Destination, decimal MinimumCelsius, decimal MaximumCelsius, int RainProbability, DateOnly StartDate, DateOnly EndDate, IReadOnlyList<DailyWeatherForecastDto> Daily);
+    private sealed record DailyWeatherForecastDto(DateOnly Date, decimal MinimumCelsius, decimal MaximumCelsius, int RainProbability);
 }

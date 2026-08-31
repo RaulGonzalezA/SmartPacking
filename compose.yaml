@@ -23,6 +23,16 @@ services:
     volumes:
       - azurite-data:/data
 
+  seq:
+    image: datalust/seq:2026.1
+    environment:
+      ACCEPT_EULA: Y
+    ports:
+      - "5341:80"
+      - "5342:5341"
+    volumes:
+      - seq-data:/data
+
   api:
     build:
       context: .
@@ -34,6 +44,8 @@ services:
       Storage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNoGFBlRgpFTuBlZ8eBv+K6qK2ZJ+4ZEdE1M3T2h+Q2QZfYxYw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
       Storage__PublicBaseUrl: http://localhost:10000/devstoreaccount1
       Storage__Container: wardrobe
+      Observability__SeqUrl: http://seq:80
+      Observability__OtlpEndpoint: http://seq:5341/ingest/otlp
     ports:
       - "8080:8080"
     depends_on:
@@ -41,6 +53,13 @@ services:
         condition: service_healthy
       azurite:
         condition: service_started
+      seq:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   web:
     build:
@@ -50,11 +69,15 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       Api__BaseUrl: http://api:8080/
+      Observability__SeqUrl: http://seq:80
+      Observability__OtlpEndpoint: http://seq:5341/ingest/otlp
     ports:
       - "8081:8080"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   postgres-data:
   azurite-data:
+  seq-data:

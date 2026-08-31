@@ -5,6 +5,7 @@
     <Project Path="src/SmartPacking.Contracts/SmartPacking.Contracts.csproj" />
     <Project Path="src/SmartPacking.Domain/SmartPacking.Domain.csproj" />
     <Project Path="src/SmartPacking.Infrastructure/SmartPacking.Infrastructure.csproj" />
+    <Project Path="src/SmartPacking.Infrastructure.PostgreSql/SmartPacking.Infrastructure.PostgreSql.csproj" />
     <Project Path="src/SmartPacking.Web/SmartPacking.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">

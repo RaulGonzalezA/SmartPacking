@@ -8,6 +8,8 @@ public interface ISmartPackingStore
     Task<UserProfile> GetDefaultUserAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<FamilyProfile>> GetFamilyProfilesAsync(Guid userId, CancellationToken cancellationToken);
     Task<FamilyProfile> AddFamilyProfileAsync(Guid userId, FamilyProfile profile, CancellationToken cancellationToken);
+    Task<FamilyProfile?> UpdateFamilyProfileAsync(Guid userId, FamilyProfile profile, CancellationToken cancellationToken);
+    Task<bool> ArchiveFamilyProfileAsync(Guid userId, Guid profileId, CancellationToken cancellationToken);
     Task<IReadOnlyList<FamilyProfile>> GetTripProfilesAsync(Guid userId, Guid tripId, CancellationToken cancellationToken);
     Task SetTripProfilesAsync(Guid userId, Guid tripId, IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(Guid userId, CancellationToken cancellationToken);

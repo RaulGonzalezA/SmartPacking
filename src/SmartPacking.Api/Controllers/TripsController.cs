@@ -8,7 +8,7 @@ namespace SmartPacking.Api.Controllers;
 
 [ApiController]
 [Route("api/trips")]
-public sealed class TripsController(ISmartPackingStore store, PackingListService packingLists, OpenMeteoWeatherProvider weather) : ControllerBase
+public sealed class TripsController(ISmartPackingStore store, PackingListService packingLists, ProfilePackingListService profilePackingLists, OpenMeteoWeatherProvider weather) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<Trip>>> GetAsync(CancellationToken cancellationToken)
@@ -26,7 +26,18 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var trip = new Trip(Guid.NewGuid(), request.Destination.Trim(), request.StartDate, request.EndDate, request.MinimumTemperatureCelsius, request.MaximumTemperatureCelsius, request.Activities.Count == 0 ? [Style.Casual] : request.Activities);
+        var template = TripTemplateCatalog.Find(request.TemplateKey);
+        var trip = new Trip(
+            Guid.NewGuid(),
+            request.Destination.Trim(),
+            request.StartDate,
+            request.EndDate,
+            request.MinimumTemperatureCelsius,
+            request.MaximumTemperatureCelsius,
+            request.Activities.Count == 0 ? template?.Activities ?? [Style.Casual] : request.Activities,
+            template?.Key,
+            request.LuggageAllowanceGrams ?? template?.DefaultLuggageAllowanceGrams ?? 10000,
+            request.CabinOnly ?? template?.CabinOnly ?? true);
         var created = await store.AddTripAsync(user.Id, trip, cancellationToken);
         await store.SetTripProfilesAsync(user.Id, created.Id, [user.Id], cancellationToken);
         await store.AddChecklistItemsAsync(user.Id, ChecklistDefaults.Create(created.Id), cancellationToken);
@@ -58,10 +69,43 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
             return NotFoundProblem("Viaje no encontrado");
         }
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var lastForecastDate = today.AddDays(15);
+        if (trip.EndDate < today)
+        {
+            return Problem(statusCode: StatusCodes.Status422UnprocessableEntity, title: "Viaje finalizado", detail: "La previsión no está disponible para viajes ya finalizados.");
+        }
+
+        if (trip.StartDate > lastForecastDate)
+        {
+            return Problem(statusCode: StatusCodes.Status422UnprocessableEntity, title: "Previsión aún no disponible", detail: $"La previsión detallada estará disponible a partir del {trip.StartDate.AddDays(-15):dd/MM/yyyy}.");
+        }
+
         var forecast = await weather.GetAsync(trip.Destination, trip.StartDate, trip.EndDate, cancellationToken);
         return forecast is null
-            ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Previsión no disponible", detail: "La previsión solo está disponible para los próximos 16 días.")
+            ? Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Previsión no disponible", detail: "No se ha podido obtener la previsión para este destino en este momento.")
             : Ok(forecast);
+    }
+
+    [HttpGet("templates")]
+    public ActionResult<IReadOnlyList<TripTemplate>> GetTemplates() => Ok(TripTemplateCatalog.All);
+
+    [HttpGet("{tripId:guid}/profiles/{profileId:guid}/luggage-rules")]
+    public async Task<ActionResult<LuggageRulesSummary>> GetLuggageRulesAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken)
+    {
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        var plan = await packingLists.GetOrCreateAsync(user.Id, tripId, cancellationToken);
+        var trip = await store.GetTripAsync(user.Id, tripId, cancellationToken);
+        var isTraveller = (await store.GetTripProfilesAsync(user.Id, tripId, cancellationToken)).Any(profile => profile.Id == profileId);
+        if (plan is null || trip is null || !isTraveller)
+        {
+            return NotFoundProblem("Perfil o viaje no encontrado");
+        }
+
+        var profilePlan = await profilePackingLists.GetOrCreateAsync(user.Id, tripId, profileId, cancellationToken);
+        var weight = profilePlan?.Plan.TotalWeightGrams ?? 0;
+        var remaining = trip.LuggageAllowanceGrams - weight;
+        return Ok(new LuggageRulesSummary(trip.LuggageAllowanceGrams, weight, remaining, trip.CabinOnly, remaining >= 0, 100, 1000));
     }
 
     [HttpGet("{tripId:guid}/checklist")]

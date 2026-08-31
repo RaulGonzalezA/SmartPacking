@@ -8,7 +8,14 @@
     <HeadOutlet />
 </head>
 <body>
-    <Routes />
+    <ErrorBoundary>
+        <ChildContent>
+            <Routes />
+        </ChildContent>
+        <ErrorContent Context="exception">
+            <main><p class="feedback error">@exception.Message</p></main>
+        </ErrorContent>
+    </ErrorBoundary>
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>

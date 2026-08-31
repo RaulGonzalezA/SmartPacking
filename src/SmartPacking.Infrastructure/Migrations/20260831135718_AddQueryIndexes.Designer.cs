@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SmartPacking.Infrastructure;
 
@@ -10,9 +11,11 @@ using SmartPacking.Infrastructure;
 namespace SmartPacking.Infrastructure.Migrations
 {
     [DbContext(typeof(SmartPackingDbContext))]
-    partial class SmartPackingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260831135718_AddQueryIndexes")]
+    partial class AddQueryIndexes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
@@ -137,9 +140,6 @@ namespace SmartPacking.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsArchived")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -148,8 +148,6 @@ namespace SmartPacking.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("UserId", "IsArchived");
 
                     b.HasIndex("UserId", "Name")
                         .IsUnique();
@@ -248,18 +246,12 @@ namespace SmartPacking.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("CabinOnly")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Destination")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("LuggageAllowanceGrams")
-                        .HasColumnType("INTEGER");
 
                     b.Property<int>("MaximumTemperatureCelsius")
                         .HasColumnType("INTEGER");
@@ -268,9 +260,6 @@ namespace SmartPacking.Infrastructure.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateOnly>("StartDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TemplateKey")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("UserId")

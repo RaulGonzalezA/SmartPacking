@@ -22,7 +22,7 @@ public sealed record ClothingItem(
     Guid? OwnerProfileId = null);
 
 public sealed record UserProfile(Guid Id, string Name);
-public sealed record FamilyProfile(Guid Id, string Name);
+public sealed record FamilyProfile(Guid Id, string Name, bool IsArchived = false);
 
 public sealed record PackingList(Guid Id, Guid TripId, Guid UserId, DateTimeOffset CreatedAt, IReadOnlyCollection<PackingListItem> Items);
 public sealed record PackingListItem(Guid ClothingItemId, bool IsPacked);
@@ -38,7 +38,10 @@ public sealed record Trip(
     DateOnly EndDate,
     int MinimumTemperatureCelsius,
     int MaximumTemperatureCelsius,
-    IReadOnlyCollection<Style> Activities)
+    IReadOnlyCollection<Style> Activities,
+    string? TemplateKey = null,
+    int LuggageAllowanceGrams = 10000,
+    bool CabinOnly = true)
 {
     public int Days => EndDate.DayNumber - StartDate.DayNumber + 1;
 }

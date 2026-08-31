@@ -8,10 +8,15 @@ public interface IWebSmartPackingClient
     Task<IReadOnlyList<Trip>> GetTripsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<FamilyProfile>> GetProfilesAsync(CancellationToken cancellationToken);
     Task<FamilyProfile> CreateProfileAsync(string name, CancellationToken cancellationToken);
+    Task UpdateProfileAsync(Guid profileId, string name, CancellationToken cancellationToken);
+    Task ArchiveProfileAsync(Guid profileId, CancellationToken cancellationToken);
     Task<IReadOnlyList<FamilyProfile>> GetTripProfilesAsync(Guid tripId, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(bool deleted, CancellationToken cancellationToken);
     Task<ProfileTripPackingPlan?> GetProfilePackingListAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken);
-    Task CreateTripAsync(string destination, DateOnly startDate, DateOnly endDate, int minimumTemperatureCelsius, int maximumTemperatureCelsius, CancellationToken cancellationToken);
+    Task<IReadOnlyList<TripTemplate>> GetTripTemplatesAsync(CancellationToken cancellationToken);
+    Task<TripWeatherForecast?> GetWeatherAsync(Guid tripId, CancellationToken cancellationToken);
+    Task<LuggageRulesSummary?> GetLuggageRulesAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken);
+    Task CreateTripAsync(string destination, DateOnly startDate, DateOnly endDate, int minimumTemperatureCelsius, int maximumTemperatureCelsius, string? templateKey, int luggageAllowanceGrams, bool cabinOnly, CancellationToken cancellationToken);
     Task DeleteTripAsync(Guid tripId, CancellationToken cancellationToken);
     Task SetTripProfilesAsync(Guid tripId, IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken);
     Task CreateClothingAsync(ClothingItem item, CancellationToken cancellationToken);

@@ -35,14 +35,45 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     }
 
     public async Task<IReadOnlyList<FamilyProfile>> GetFamilyProfilesAsync(Guid userId, CancellationToken cancellationToken) =>
-        (await dbContext.FamilyProfiles.Where(profile => profile.UserId == userId).OrderBy(profile => profile.Name).ToListAsync(cancellationToken)).Select(profile => new FamilyProfile(profile.Id, profile.Name)).ToArray();
+        (await dbContext.FamilyProfiles.Where(profile => profile.UserId == userId).OrderBy(profile => profile.IsArchived).ThenBy(profile => profile.Name).ToListAsync(cancellationToken)).Select(ToDomain).ToArray();
 
     public async Task<FamilyProfile> AddFamilyProfileAsync(Guid userId, FamilyProfile profile, CancellationToken cancellationToken)
     {
         var entity = new FamilyProfileEntity { Id = profile.Id == Guid.Empty ? Guid.NewGuid() : profile.Id, UserId = userId, Name = profile.Name };
         dbContext.FamilyProfiles.Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return new FamilyProfile(entity.Id, entity.Name);
+        return ToDomain(entity);
+    }
+
+    public async Task<FamilyProfile?> UpdateFamilyProfileAsync(Guid userId, FamilyProfile profile, CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.FamilyProfiles.SingleOrDefaultAsync(candidate => candidate.UserId == userId && candidate.Id == profile.Id, cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        entity.Name = profile.Name;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDomain(entity);
+    }
+
+    public async Task<bool> ArchiveFamilyProfileAsync(Guid userId, Guid profileId, CancellationToken cancellationToken)
+    {
+        if (profileId == DefaultUserId)
+        {
+            return false;
+        }
+
+        var entity = await dbContext.FamilyProfiles.SingleOrDefaultAsync(candidate => candidate.UserId == userId && candidate.Id == profileId, cancellationToken);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        entity.IsArchived = true;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<IReadOnlyList<FamilyProfile>> GetTripProfilesAsync(Guid userId, Guid tripId, CancellationToken cancellationToken) =>
@@ -50,11 +81,11 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
                 join profile in dbContext.FamilyProfiles on link.ProfileId equals profile.Id
                 where link.UserId == userId && link.TripId == tripId && profile.UserId == userId
                 orderby profile.Name
-                select new FamilyProfile(profile.Id, profile.Name)).ToListAsync(cancellationToken));
+                select new FamilyProfile(profile.Id, profile.Name, profile.IsArchived)).ToListAsync(cancellationToken));
 
     public async Task SetTripProfilesAsync(Guid userId, Guid tripId, IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken)
     {
-        var validIds = await dbContext.FamilyProfiles.Where(profile => profile.UserId == userId && profileIds.Contains(profile.Id)).Select(profile => profile.Id).ToListAsync(cancellationToken);
+        var validIds = await dbContext.FamilyProfiles.Where(profile => profile.UserId == userId && !profile.IsArchived && profileIds.Contains(profile.Id)).Select(profile => profile.Id).ToListAsync(cancellationToken);
         var current = dbContext.TripProfiles.Where(link => link.UserId == userId && link.TripId == tripId);
         dbContext.TripProfiles.RemoveRange(current);
         dbContext.TripProfiles.AddRange(validIds.Distinct().Select(profileId => new TripProfileEntity { UserId = userId, TripId = tripId, ProfileId = profileId }));
@@ -298,7 +329,8 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
         CombinationIds = JsonSerializer.Serialize(item.CombinesWith)
     };
     private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId);
-    private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities) };
-    private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? []);
+    private static FamilyProfile ToDomain(FamilyProfileEntity profile) => new(profile.Id, profile.Name, profile.IsArchived);
+    private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities), TemplateKey = trip.TemplateKey, LuggageAllowanceGrams = trip.LuggageAllowanceGrams, CabinOnly = trip.CabinOnly };
+    private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? [], trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly);
 #pragma warning restore S4136
 }

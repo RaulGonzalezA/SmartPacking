@@ -1,0 +1,215 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IWebSmartPackingClient Api
+
+<main>
+    <p class="eyebrow">TU ARMARIO · TU VIAJE · TU MALETA</p>
+    <h1>Maleta Inteligente</h1>
+
+    <nav class="tabs" aria-label="Secciones">
+        @foreach (var tab in Tabs)
+        {
+            <button class="tab @(activeTab == tab.Key ? "active" : "")" @onclick="() => activeTab = tab.Key">@tab.Value</button>
+        }
+    </nav>
+
+    @if (!string.IsNullOrWhiteSpace(feedback))
+    {
+        <p class="feedback">@feedback</p>
+    }
+
+    @if (activeTab == "trips")
+    {
+        <section class="controls">
+            <label>Viaje activo <select @bind="selectedTripId" @bind:after="ReloadTripAsync">@foreach (var trip in trips) { <option value="@trip.Id">@trip.Destination · @trip.StartDate</option> }</select></label>
+            <button @onclick="() => showTripForm = !showTripForm">Nuevo viaje</button>
+            <button class="danger" @onclick="() => RunAsync(DeleteTripAsync)">Eliminar viaje</button>
+        </section>
+        @if (showTripForm)
+        {
+            <EditForm Model="newTrip" OnValidSubmit="() => RunAsync(CreateTripAsync)" class="entry-form"><DataAnnotationsValidator />
+                <label>Plantilla <select @bind="newTrip.TemplateKey" @bind:after="ApplyTemplate"><option value="">Personalizado</option>@foreach (var template in templates) { <option value="@template.Key">@template.Name</option> }</select></label><label>Destino <InputText @bind-Value="newTrip.Destination" /></label><label>Salida <InputDate @bind-Value="newTrip.StartDate" /></label><label>Regreso <InputDate @bind-Value="newTrip.EndDate" /></label>
+                <label>Mínima °C <InputNumber @bind-Value="newTrip.MinimumTemperatureCelsius" /></label><label>Máxima °C <InputNumber @bind-Value="newTrip.MaximumTemperatureCelsius" /></label><label>Límite de peso (g) <InputNumber @bind-Value="newTrip.LuggageAllowanceGrams" /></label><label><InputCheckbox @bind-Value="newTrip.CabinOnly" /> Solo equipaje de cabina</label><button>Crear viaje</button>
+            </EditForm>
+        }
+        <section class="family-section"><h2>Viajeros</h2><p class="muted">Cada viajero conserva su propia maleta.</p>
+            <div class="quick-form"><label>Nuevo viajero <InputText @bind-Value="newTravellerName" placeholder="Nombre" /></label><button @onclick="() => RunAsync(AddTravellerAsync)">Añadir viajero</button></div>
+            <div class="profile-items">@foreach (var profile in profiles.Where(profile => !profile.IsArchived)) { <label class="profile-item"><input type="checkbox" checked="@tripProfileIds.Contains(profile.Id)" @onchange="args => SetTraveller(profile.Id, args.Value)" /> @profile.Name <button type="button" @onclick="() => StartEditingTraveller(profile)">Editar</button>@if (profile.Id != DefaultProfileId) { <button type="button" class="danger" @onclick="() => RunAsync(() => ArchiveTravellerAsync(profile.Id))">Archivar</button> }</label> }</div>
+            <button @onclick="() => RunAsync(SaveTravellersAsync)">Guardar viajeros</button>
+            @if (editingTraveller is not null) { <div class="quick-form"><label>Renombrar <InputText @bind-Value="editingTravellerName" /></label><button @onclick="() => RunAsync(SaveTravellerNameAsync)">Guardar nombre</button><button type="button" @onclick="CancelEditingTraveller">Cancelar</button></div> }
+        </section>
+        @if (weather is not null) { <section class="family-section"><h2>Previsión diaria</h2><p class="muted">@weather.Destination · @weather.MinimumCelsius–@weather.MaximumCelsius °C · lluvia máxima @weather.RainProbability%</p>@if (weather.EndDate < SelectedTripEndDate) { <p class="muted">La previsión está disponible hasta el @weather.EndDate.ToString("dd/MM/yyyy"). El resto del viaje aún queda fuera de la ventana de 16 días.</p> }<div class="profile-items">@foreach (var day in weather.Daily) { <span class="profile-item">@day.Date.ToString("ddd dd/MM") · @day.MinimumCelsius–@day.MaximumCelsius °C · ☔ @day.RainProbability%</span> }</div></section> }
+        else if (selectedTripId != Guid.Empty) { <p class="muted">@WeatherUnavailableMessage</p> }
+    }
+
+    @if (activeTab == "wardrobe")
+    {
+        <section class="wardrobe"><div class="section-heading"><h2>Mi armario</h2><button @onclick="() => showClothingForm = !showClothingForm">Añadir prenda</button></div>
+            @if (showClothingForm)
+            {
+                <EditForm Model="newClothing" OnValidSubmit="() => RunAsync(CreateClothingAsync)" class="entry-form"><label>Nombre <InputText @bind-Value="newClothing.Name" /></label><label>Propietario <select @bind="newClothing.OwnerProfileId">@foreach (var profile in profiles) { <option value="@profile.Id">@profile.Name</option> }</select></label><label>Color <InputText @bind-Value="newClothing.Color" /></label><button>Guardar</button></EditForm>
+            }
+            <div class="wardrobe-items">@foreach (var item in wardrobe) { <article class="wardrobe-item"><div><strong>@item.Name</strong><span class="wardrobe-meta">@item.Color · @OwnerName(item.OwnerProfileId)</span></div><label><input type="checkbox" checked="@item.IsClean" @onchange="args => RunAsync(() => UpdateStatusAsync(item, args.Value, item.IsAvailable))" /> Limpia</label><label><input type="checkbox" checked="@item.IsAvailable" @onchange="args => RunAsync(() => UpdateStatusAsync(item, item.IsClean, args.Value))" /> Disponible</label><button class="danger" @onclick="() => RunAsync(() => DeleteClothingAsync(item.Id))">Retirar</button></article> }</div>
+        </section>
+        <section class="wardrobe"><h2>Prendas retiradas</h2><div class="wardrobe-items">@foreach (var item in deletedWardrobe) { <article class="wardrobe-item"><strong>@item.Name</strong><button @onclick="() => RunAsync(() => RestoreClothingAsync(item.Id))">Recuperar</button></article> }</div></section>
+    }
+
+    @if (activeTab == "packing" && plan is not null)
+    {
+        <section class="hero"><div><p>@plan.Plan.Trip.Destination · @plan.Plan.Trip.Days días</p><h2>Maleta de @plan.Profile.Name</h2></div></section>
+        <section class="traveller-select"><label>Maleta de <select @bind="selectedProfileId" @bind:after="ReloadPlanAsync">@foreach (var profile in tripProfiles) { <option value="@profile.Id">@profile.Name</option> }</select></label></section>
+        @if (luggageRules is not null) { <section class="family-section"><h2>Reglas de equipaje</h2><p class="@(luggageRules.IsWithinAllowance ? "muted" : "feedback")">@luggageRules.PlannedWeightGrams g de @luggageRules.AllowanceGrams g · @(luggageRules.IsWithinAllowance ? $"Quedan {luggageRules.RemainingGrams} g" : $"Exceso de {-luggageRules.RemainingGrams} g")</p>@if (luggageRules.CabinOnly) { <p class="muted">Cabina: recipientes de hasta @luggageRules.LiquidContainerMaximumMilliliters ml, en una bolsa de hasta @luggageRules.CabinLiquidsBagMaximumMilliliters ml.</p> }</section> }
+        <section><div class="section-heading"><h2>Preparar la maleta</h2></div><div class="cards">@foreach (var planned in plan.Plan.Items) { <article class="card"><label><input type="checkbox" checked="@planned.IsPacked" @onchange="args => RunAsync(() => SetPackedAsync(planned, args.Value))" /></label><div><p class="type">@planned.Recommendation.Item.Type</p><h3>@planned.Recommendation.Item.Name</h3><p class="reason">@string.Join(" · ", planned.Recommendation.Reasons)</p></div></article> }</div></section>
+    }
+</main>
+
+@code {
+#pragma warning disable S2681 // Guard clauses are intentionally kept compact in component callbacks.
+    private static readonly IReadOnlyDictionary<string, string> Tabs = new Dictionary<string, string> { ["trips"] = "Viajes", ["wardrobe"] = "Armario", ["packing"] = "Maleta" };
+    private readonly TripInput newTrip = new();
+    private readonly ClothingInput newClothing = new();
+    private IReadOnlyList<Trip> trips = [];
+    private IReadOnlyList<FamilyProfile> profiles = [];
+    private IReadOnlyList<TripTemplate> templates = [];
+    private IReadOnlyList<FamilyProfile> tripProfiles = [];
+    private IReadOnlyList<ClothingItem> wardrobe = [];
+    private IReadOnlyList<ClothingItem> deletedWardrobe = [];
+    private ProfileTripPackingPlan? plan;
+    private TripWeatherForecast? weather;
+    private LuggageRulesSummary? luggageRules;
+    private Guid selectedTripId;
+    private Guid selectedProfileId;
+    private string activeTab = "trips";
+    private string? feedback;
+    private string newTravellerName = string.Empty;
+    private FamilyProfile? editingTraveller;
+    private string editingTravellerName = string.Empty;
+    private bool showTripForm;
+    private bool showClothingForm;
+    private HashSet<Guid> tripProfileIds = [];
+
+    private static readonly Guid DefaultProfileId = Guid.Parse("90ae4435-5a54-42dc-a0a4-4f8aa4d96f90");
+    protected override async Task OnInitializedAsync() => await RunAsync(LoadAsync);
+    private async Task LoadAsync() { trips = await Api.GetTripsAsync(CancellationToken.None); profiles = await Api.GetProfilesAsync(CancellationToken.None); templates = await Api.GetTripTemplatesAsync(CancellationToken.None); wardrobe = await Api.GetWardrobeAsync(false, CancellationToken.None); deletedWardrobe = await Api.GetWardrobeAsync(true, CancellationToken.None); selectedTripId = selectedTripId == Guid.Empty ? trips.FirstOrDefault()?.Id ?? Guid.Empty : selectedTripId; await LoadTripAsync(); }
+    private async Task LoadTripAsync()
+    {
+        if (selectedTripId == Guid.Empty) return;
+        tripProfiles = await Api.GetTripProfilesAsync(selectedTripId, CancellationToken.None);
+        tripProfileIds = tripProfiles.Select(profile => profile.Id).ToHashSet();
+        selectedProfileId = selectedProfileId == Guid.Empty || !tripProfileIds.Contains(selectedProfileId) ? tripProfiles.FirstOrDefault()?.Id ?? Guid.Empty : selectedProfileId;
+        await LoadPlanAsync();
+        weather = await Api.GetWeatherAsync(selectedTripId, CancellationToken.None);
+    }
+    private async Task LoadPlanAsync()
+    {
+        if (selectedTripId == Guid.Empty || selectedProfileId == Guid.Empty) return;
+        plan = await Api.GetProfilePackingListAsync(selectedTripId, selectedProfileId, CancellationToken.None);
+        luggageRules = await Api.GetLuggageRulesAsync(selectedTripId, selectedProfileId, CancellationToken.None);
+    }
+    private Task ReloadTripAsync() => RunAsync(LoadTripAsync);
+    private Task ReloadPlanAsync() => RunAsync(LoadPlanAsync);
+    private async Task RunAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (ApiProblemException exception)
+        {
+            feedback = exception.Message;
+        }
+        catch (HttpRequestException)
+        {
+            feedback = "No se ha podido conectar con el servicio. Inténtalo de nuevo.";
+        }
+        catch (Exception)
+        {
+            feedback = "Ha ocurrido un error inesperado. Inténtalo de nuevo.";
+        }
+    }
+    private string WeatherUnavailableMessage
+    {
+        get
+        {
+            var trip = trips.SingleOrDefault(candidate => candidate.Id == selectedTripId);
+            if (trip is null || trip.StartDate <= DateOnly.FromDateTime(DateTime.Today).AddDays(16))
+            {
+                return "No hay previsión disponible para estas fechas.";
+            }
+
+            var availableFrom = trip.StartDate.AddDays(-15);
+            return $"Es muy pronto para una previsión fiable. Podrás consultar la previsión detallada a partir del {availableFrom:dd/MM/yyyy}.";
+        }
+    }
+    private DateOnly SelectedTripEndDate => trips.SingleOrDefault(candidate => candidate.Id == selectedTripId)?.EndDate ?? DateOnly.MinValue;
+    private void ApplyTemplate()
+    {
+        var template = templates.SingleOrDefault(candidate => candidate.Key == newTrip.TemplateKey);
+        if (template is null)
+        {
+            return;
+        }
+
+        newTrip.MinimumTemperatureCelsius = template.DefaultMinimumTemperatureCelsius;
+        newTrip.MaximumTemperatureCelsius = template.DefaultMaximumTemperatureCelsius;
+        newTrip.LuggageAllowanceGrams = template.DefaultLuggageAllowanceGrams;
+        newTrip.CabinOnly = template.CabinOnly;
+    }
+    private async Task CreateTripAsync() { await Api.CreateTripAsync(newTrip.Destination, newTrip.StartDate, newTrip.EndDate, newTrip.MinimumTemperatureCelsius, newTrip.MaximumTemperatureCelsius, newTrip.TemplateKey, newTrip.LuggageAllowanceGrams, newTrip.CabinOnly, CancellationToken.None); showTripForm = false; feedback = "Viaje creado."; await LoadAsync(); }
+    private async Task DeleteTripAsync() { await Api.DeleteTripAsync(selectedTripId, CancellationToken.None); selectedTripId = Guid.Empty; feedback = "Viaje eliminado."; await LoadAsync(); }
+    private void SetTraveller(Guid profileId, object? value) { if (value is bool selected && selected) tripProfileIds.Add(profileId); else tripProfileIds.Remove(profileId); }
+    private async Task AddTravellerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newTravellerName))
+        {
+            feedback = "Escribe el nombre del viajero.";
+            return;
+        }
+
+        var profile = await Api.CreateProfileAsync(newTravellerName.Trim(), CancellationToken.None);
+        profiles = [.. profiles, profile];
+        tripProfileIds.Add(profile.Id);
+        newTravellerName = string.Empty;
+        if (selectedTripId != Guid.Empty)
+        {
+            await Api.SetTripProfilesAsync(selectedTripId, tripProfileIds, CancellationToken.None);
+            await LoadTripAsync();
+        }
+
+        feedback = $"{profile.Name} se ha añadido como viajero.";
+    }
+    private async Task SaveTravellersAsync() { await Api.SetTripProfilesAsync(selectedTripId, tripProfileIds, CancellationToken.None); feedback = "Viajeros guardados."; await LoadTripAsync(); }
+    private void StartEditingTraveller(FamilyProfile profile) { editingTraveller = profile; editingTravellerName = profile.Name; }
+    private void CancelEditingTraveller() { editingTraveller = null; editingTravellerName = string.Empty; }
+    private async Task SaveTravellerNameAsync()
+    {
+        if (editingTraveller is null || string.IsNullOrWhiteSpace(editingTravellerName))
+        {
+            return;
+        }
+
+        await Api.UpdateProfileAsync(editingTraveller.Id, editingTravellerName.Trim(), CancellationToken.None);
+        CancelEditingTraveller();
+        feedback = "Viajero actualizado.";
+        await LoadAsync();
+    }
+    private async Task ArchiveTravellerAsync(Guid profileId) { await Api.ArchiveProfileAsync(profileId, CancellationToken.None); tripProfileIds.Remove(profileId); feedback = "Viajero archivado. Sus maletas anteriores se conservan."; await LoadAsync(); }
+    private async Task CreateClothingAsync() { await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), newClothing.Name, ClothingType.TShirt, Season.AllYear, newClothing.Color, 2, false, Style.Casual, 150, true, true, 70, [], false, newClothing.OwnerProfileId), CancellationToken.None); showClothingForm = false; feedback = "Prenda guardada."; await LoadAsync(); }
+    private async Task UpdateStatusAsync(ClothingItem item, object? cleanValue, object? availableValue)
+    {
+        await Api.UpdateClothingStatusAsync(item.Id, cleanValue is bool clean && clean, availableValue is bool available && available, CancellationToken.None);
+        await LoadAsync();
+    }
+    private async Task DeleteClothingAsync(Guid id) { await Api.DeleteClothingAsync(id, CancellationToken.None); await LoadAsync(); }
+    private async Task RestoreClothingAsync(Guid id) { await Api.RestoreClothingAsync(id, CancellationToken.None); await LoadAsync(); }
+    private async Task SetPackedAsync(PlannedItem item, object? value)
+    {
+        if (plan is null) return;
+        await Api.SetProfilePackedAsync(plan.Plan.PackingListId, item.Recommendation.Item.Id, value is bool packed && packed, CancellationToken.None);
+        await LoadPlanAsync();
+    }
+    private string OwnerName(Guid? ownerId) => profiles.FirstOrDefault(profile => profile.Id == ownerId)?.Name ?? "Sin asignar";
+    private sealed class TripInput { public string Destination { get; set; } = string.Empty; public DateOnly StartDate { get; set; } = DateOnly.FromDateTime(DateTime.Today); public DateOnly EndDate { get; set; } = DateOnly.FromDateTime(DateTime.Today.AddDays(3)); public int MinimumTemperatureCelsius { get; set; } = 18; public int MaximumTemperatureCelsius { get; set; } = 28; public string? TemplateKey { get; set; } public int LuggageAllowanceGrams { get; set; } = 10000; public bool CabinOnly { get; set; } = true; }
+    private sealed class ClothingInput { public string Name { get; set; } = string.Empty; public string Color { get; set; } = string.Empty; public Guid OwnerProfileId { get; set; } }
+#pragma warning restore S2681
+}

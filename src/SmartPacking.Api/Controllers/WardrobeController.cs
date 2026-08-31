@@ -11,18 +11,28 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
 {
     [HttpGet]
     [ProducesResponseType<ApiResult<IReadOnlyList<ClothingItemResponse>>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<ApiResult<IReadOnlyList<ClothingItemResponse>>>> GetAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResult<IReadOnlyList<ClothingItemResponse>>>> GetAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 100, CancellationToken cancellationToken = default)
     {
+        if (page < 1 || pageSize is < 1 or > 100)
+        {
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["pagination"] = ["La página debe ser positiva y el tamaño estar entre 1 y 100."] }));
+        }
+
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var items = (await store.GetWardrobeAsync(user.Id, cancellationToken)).Where(item => !item.IsDeleted).Select(item => item.ToResponse()).ToArray();
+        var items = (await store.GetWardrobeAsync(user.Id, cancellationToken)).Where(item => !item.IsDeleted).Skip((page - 1) * pageSize).Take(pageSize).Select(item => item.ToResponse()).ToArray();
         return Ok(new ApiResult<IReadOnlyList<ClothingItemResponse>>(items));
     }
 
     [HttpGet("deleted")]
-    public async Task<ActionResult<ApiResult<IReadOnlyList<ClothingItemResponse>>>> GetDeletedAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResult<IReadOnlyList<ClothingItemResponse>>>> GetDeletedAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 100, CancellationToken cancellationToken = default)
     {
+        if (page < 1 || pageSize is < 1 or > 100)
+        {
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["pagination"] = ["La página debe ser positiva y el tamaño estar entre 1 y 100."] }));
+        }
+
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var items = (await store.GetWardrobeAsync(user.Id, cancellationToken)).Where(item => item.IsDeleted).Select(item => item.ToResponse()).ToArray();
+        var items = (await store.GetWardrobeAsync(user.Id, cancellationToken)).Where(item => item.IsDeleted).Skip((page - 1) * pageSize).Take(pageSize).Select(item => item.ToResponse()).ToArray();
         return Ok(new ApiResult<IReadOnlyList<ClothingItemResponse>>(items));
     }
 

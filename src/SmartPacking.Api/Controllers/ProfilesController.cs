@@ -29,6 +29,28 @@ public sealed class ProfilesController(ISmartPackingStore store, ProfilePackingL
         return Created($"/api/profiles/{profile.Id}", profile);
     }
 
+    [HttpPut("profiles/{profileId:guid}")]
+    public async Task<ActionResult<FamilyProfile>> UpdateAsync(Guid profileId, UpdateFamilyProfileRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["name"] = ["Escribe un nombre para el perfil."] }));
+        }
+
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        var profile = await store.UpdateFamilyProfileAsync(user.Id, new FamilyProfile(profileId, request.Name.Trim()), cancellationToken);
+        return profile is null ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Viajero no encontrado") : Ok(profile);
+    }
+
+    [HttpDelete("profiles/{profileId:guid}")]
+    public async Task<IActionResult> ArchiveAsync(Guid profileId, CancellationToken cancellationToken)
+    {
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        return await store.ArchiveFamilyProfileAsync(user.Id, profileId, cancellationToken)
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "El viajero no existe o es el perfil principal");
+    }
+
     [HttpGet("trips/{tripId:guid}/profiles")]
     public async Task<ActionResult<IReadOnlyList<FamilyProfile>>> GetTripProfilesAsync(Guid tripId, CancellationToken cancellationToken)
     {

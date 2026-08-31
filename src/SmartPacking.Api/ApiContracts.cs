@@ -6,7 +6,8 @@ namespace SmartPacking.Api;
 public sealed record SetPackedRequest(bool IsPacked);
 public sealed record UpdateClothingStatusRequest(bool IsClean, bool IsAvailable);
 public sealed record CreateChecklistItemRequest(ChecklistCategory Category, string Name);
-public sealed record CreateTripRequest(string Destination, DateOnly StartDate, DateOnly EndDate, int MinimumTemperatureCelsius, int MaximumTemperatureCelsius, IReadOnlyCollection<Style> Activities);
+public sealed record CreateTripRequest(string Destination, DateOnly StartDate, DateOnly EndDate, int MinimumTemperatureCelsius, int MaximumTemperatureCelsius, IReadOnlyCollection<Style> Activities, string? TemplateKey = null, int? LuggageAllowanceGrams = null, bool? CabinOnly = null);
 public sealed record CreateFamilyProfileRequest(string Name);
+public sealed record UpdateFamilyProfileRequest(string Name);
 public sealed record SetTripProfilesRequest(IReadOnlyCollection<Guid> ProfileIds);
 #pragma warning restore S6964
