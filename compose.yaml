@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: smartpacking
+      POSTGRES_USER: smartpacking
+      POSTGRES_PASSWORD: smartpacking
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartpacking -d smartpacking"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000
+    ports:
+      - "10000:10000"
+    volumes:
+      - azurite-data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: src/SmartPacking.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__SmartPacking: Host=postgres;Port=5432;Database=smartpacking;Username=smartpacking;Password=smartpacking
+      Storage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNoGFBlRgpFTuBlZ8eBv+K6qK2ZJ+4ZEdE1M3T2h+Q2QZfYxYw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      Storage__PublicBaseUrl: http://localhost:10000/devstoreaccount1
+      Storage__Container: wardrobe
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: src/SmartPacking.Web/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Api__BaseUrl: http://api:8080/
+    ports:
+      - "8081:8080"
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  azurite-data:

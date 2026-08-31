@@ -1,0 +1,6 @@
+.git
+.vs
+**/bin
+**/obj
+src/SmartPacking.Api/smartpacking.db*
+src/SmartPacking.Web/data-protection-keys

@@ -7,7 +7,7 @@ namespace SmartPacking.Api.Controllers;
 
 [ApiController]
 [Route("api/wardrobe")]
-public sealed class WardrobePhotosController(ISmartPackingStore store, IWebHostEnvironment environment) : ControllerBase
+public sealed class WardrobePhotosController(ISmartPackingStore store, IPhotoStorage photoStorage) : ControllerBase
 {
     [HttpPost("{clothingItemId:guid}/photo")]
     public async Task<IActionResult> UploadAsync(Guid clothingItemId, IFormFile photo, CancellationToken cancellationToken)
@@ -23,12 +23,9 @@ public sealed class WardrobePhotosController(ISmartPackingStore store, IWebHostE
             return Problem(statusCode: StatusCodes.Status404NotFound, title: "Prenda no encontrada");
         }
 
-        var uploadDirectory = Path.Combine(environment.WebRootPath, "uploads");
-        Directory.CreateDirectory(uploadDirectory);
-        var destination = Path.Combine(uploadDirectory, $"{clothingItemId}.jpg");
-        await using var output = System.IO.File.Create(destination);
-        await photo.CopyToAsync(output, cancellationToken);
-        return Ok(new ApiResult<PhotoUploadResponse>(new PhotoUploadResponse($"/uploads/{clothingItemId}.jpg")));
+        await using var photoStream = photo.OpenReadStream();
+        var imageUrl = await photoStorage.SaveJpegAsync(clothingItemId, photoStream, cancellationToken);
+        return Ok(new ApiResult<PhotoUploadResponse>(new PhotoUploadResponse(imageUrl)));
     }
 
     public sealed record PhotoUploadResponse(string ImageUrl);

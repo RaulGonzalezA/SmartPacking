@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Azure.Storage.Blobs;
 using SmartPacking.Api;
 using SmartPacking.Application;
 using SmartPacking.Infrastructure;
@@ -14,13 +15,41 @@ builder.Services.AddScoped<PackingListService>();
 builder.Services.AddScoped<ProfilePackingListService>();
 builder.Services.AddScoped<ISmartPackingStore, EfSmartPackingStore>();
 builder.Services.AddHttpClient<OpenMeteoWeatherProvider>(client => client.Timeout = TimeSpan.FromSeconds(10));
+var connectionString = builder.Configuration.GetConnectionString("SmartPacking") ?? "Data Source=smartpacking.db";
 builder.Services.AddDbContext<SmartPackingDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("SmartPacking") ?? "Data Source=smartpacking.db"));
+{
+    if (connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase))
+    {
+        options.UseNpgsql(connectionString);
+    }
+    else
+    {
+        options.UseSqlite(connectionString);
+    }
+});
+var blobConnectionString = builder.Configuration["Storage:ConnectionString"];
+if (string.IsNullOrWhiteSpace(blobConnectionString))
+{
+    builder.Services.AddSingleton<IPhotoStorage, LocalPhotoStorage>();
+}
+else
+{
+    builder.Services.AddSingleton(new BlobServiceClient(blobConnectionString));
+    builder.Services.AddSingleton<IPhotoStorage, BlobPhotoStorage>();
+}
 
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
-    await SmartPackingDatabaseMigrator.MigrateAsync(scope.ServiceProvider.GetRequiredService<SmartPackingDbContext>(), CancellationToken.None);
+    var dbContext = scope.ServiceProvider.GetRequiredService<SmartPackingDbContext>();
+    if (dbContext.Database.IsSqlite())
+    {
+        await SmartPackingDatabaseMigrator.MigrateAsync(dbContext, CancellationToken.None);
+    }
+    else
+    {
+        await dbContext.Database.EnsureCreatedAsync();
+    }
     await scope.ServiceProvider.GetRequiredService<ISmartPackingStore>().SeedAsync(CancellationToken.None);
 }
 app.UseStaticFiles();
