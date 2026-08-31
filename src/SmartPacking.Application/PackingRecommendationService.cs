@@ -5,9 +5,9 @@ namespace SmartPacking.Application;
 public sealed record RecommendedItem(ClothingItem Item, decimal Score, IReadOnlyList<string> Reasons);
 public sealed record PackingRecommendation(Trip Trip, IReadOnlyList<RecommendedItem> Items, int TotalWeightGrams);
 
-public sealed class PackingRecommendationService
+public static class PackingRecommendationService
 {
-    public PackingRecommendation Recommend(Trip trip, IEnumerable<ClothingItem> wardrobe)
+    public static PackingRecommendation Recommend(Trip trip, IEnumerable<ClothingItem> wardrobe)
     {
         var availableItems = wardrobe.Where(item => !item.IsDeleted && item.IsClean && item.IsAvailable).ToArray();
         var selected = new List<RecommendedItem>();

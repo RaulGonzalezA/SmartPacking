@@ -4,7 +4,7 @@ namespace SmartPacking.Application;
 
 public sealed record ProfileTripPackingPlan(FamilyProfile Profile, TripPackingPlan Plan);
 
-public sealed class ProfilePackingListService(ISmartPackingStore store, PackingRecommendationService recommendationService)
+public sealed class ProfilePackingListService(ISmartPackingStore store)
 {
     public async Task<ProfileTripPackingPlan?> GetOrCreateAsync(Guid userId, Guid tripId, Guid profileId, CancellationToken cancellationToken)
     {
@@ -13,7 +13,7 @@ public sealed class ProfilePackingListService(ISmartPackingStore store, PackingR
         if (profile is null || trip is null) return null;
 
         var wardrobe = (await store.GetWardrobeAsync(userId, cancellationToken)).Where(item => item.OwnerProfileId is null || item.OwnerProfileId == profileId).ToArray();
-        var recommendation = recommendationService.Recommend(trip, wardrobe);
+        var recommendation = PackingRecommendationService.Recommend(trip, wardrobe);
         var packingList = await store.GetProfilePackingListAsync(userId, tripId, profileId, cancellationToken)
             ?? await store.SaveProfilePackingListAsync(new ProfilePackingList(Guid.NewGuid(), tripId, profileId, userId, DateTimeOffset.UtcNow,
                 recommendation.Items.Select(item => new PackingListItem(item.Item.Id, false)).ToArray()), cancellationToken);

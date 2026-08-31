@@ -13,9 +13,9 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     {
         await dbContext.Database.EnsureCreatedAsync(cancellationToken);
         try { await dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE ClothingItems ADD COLUMN IsDeleted INTEGER NOT NULL DEFAULT 0", cancellationToken); }
-        catch (Microsoft.Data.Sqlite.SqliteException) { }
+        catch (Microsoft.Data.Sqlite.SqliteException) { /* Existing local databases already have this column. */ }
         try { await dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE ClothingItems ADD COLUMN OwnerProfileId TEXT NULL", cancellationToken); }
-        catch (Microsoft.Data.Sqlite.SqliteException) { }
+        catch (Microsoft.Data.Sqlite.SqliteException) { /* Existing local databases already have this column. */ }
         await dbContext.Database.ExecuteSqlAsync($"UPDATE ClothingItems SET OwnerProfileId = {DefaultUserId} WHERE OwnerProfileId IS NULL", cancellationToken);
         await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS ChecklistItems (Id TEXT NOT NULL PRIMARY KEY, UserId TEXT NOT NULL, TripId TEXT NOT NULL, Category INTEGER NOT NULL, Name TEXT NOT NULL, IsPacked INTEGER NOT NULL)", cancellationToken);
         await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS ClothingUsage (TripId TEXT NOT NULL, ClothingItemId TEXT NOT NULL, UserId TEXT NOT NULL, WasUsed INTEGER NOT NULL, PRIMARY KEY (TripId, ClothingItemId))", cancellationToken);
@@ -235,12 +235,18 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
         return items.ToArray();
     }
     public async Task SetChecklistPackedAsync(Guid userId, Guid checklistItemId, bool isPacked, CancellationToken cancellationToken)
-    { var item = await dbContext.ChecklistItems.SingleOrDefaultAsync(item => item.UserId == userId && item.Id == checklistItemId, cancellationToken); if (item is null) return; item.IsPacked = isPacked; await dbContext.SaveChangesAsync(cancellationToken); }
+    {
+        var item = await dbContext.ChecklistItems.SingleOrDefaultAsync(item => item.UserId == userId && item.Id == checklistItemId, cancellationToken);
+        if (item is null) return;
+        item.IsPacked = isPacked;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
     public async Task SaveUsageAsync(Guid userId, Guid tripId, IReadOnlyCollection<ClothingUsage> usage, CancellationToken cancellationToken)
     { var old = dbContext.ClothingUsage.Where(item => item.UserId == userId && item.TripId == tripId); dbContext.ClothingUsage.RemoveRange(old); dbContext.ClothingUsage.AddRange(usage.Select(item => new ClothingUsageEntity { UserId = userId, TripId = tripId, ClothingItemId = item.ClothingItemId, WasUsed = item.WasUsed })); await dbContext.SaveChangesAsync(cancellationToken); }
     public async Task<IReadOnlyList<ClothingUsage>> GetUsageAsync(Guid userId, Guid tripId, CancellationToken cancellationToken) =>
         (await dbContext.ClothingUsage.Where(item => item.UserId == userId && item.TripId == tripId).ToListAsync(cancellationToken)).Select(item => new ClothingUsage(item.TripId, item.ClothingItemId, item.WasUsed)).ToArray();
 
+#pragma warning disable S4136 // Entity/domain conversions remain grouped by their related type.
     private static ClothingItemEntity ToEntity(Guid userId, ClothingItem item) => new()
     {
         Id = item.Id, UserId = userId, Name = item.Name, Type = (int)item.Type, Season = (int)item.Season, Color = item.Color,
@@ -250,4 +256,5 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId);
     private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities) };
     private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? []);
+#pragma warning restore S4136
 }

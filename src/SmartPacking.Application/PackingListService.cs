@@ -5,7 +5,7 @@ namespace SmartPacking.Application;
 public sealed record PlannedItem(RecommendedItem Recommendation, bool IsPacked);
 public sealed record TripPackingPlan(Trip Trip, Guid PackingListId, IReadOnlyList<PlannedItem> Items, int TotalWeightGrams);
 
-public sealed class PackingListService(ISmartPackingStore store, PackingRecommendationService recommendationService)
+public sealed class PackingListService(ISmartPackingStore store)
 {
     public async Task<TripPackingPlan?> GetOrCreateAsync(Guid userId, Guid tripId, CancellationToken cancellationToken)
     {
@@ -13,7 +13,7 @@ public sealed class PackingListService(ISmartPackingStore store, PackingRecommen
         if (trip is null) return null;
 
         var wardrobe = await store.GetWardrobeAsync(userId, cancellationToken);
-        var recommendation = recommendationService.Recommend(trip, wardrobe);
+        var recommendation = PackingRecommendationService.Recommend(trip, wardrobe);
         var packingList = await store.GetPackingListAsync(userId, tripId, cancellationToken)
             ?? await store.SavePackingListAsync(
                 new PackingList(Guid.NewGuid(), trip.Id, userId, DateTimeOffset.UtcNow,

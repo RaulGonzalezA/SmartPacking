@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using SmartPacking.Api;
 using SmartPacking.Application;
 using SmartPacking.Domain;
 using SmartPacking.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddSingleton<PackingRecommendationService>();
 builder.Services.AddScoped<PackingListService>();
 builder.Services.AddScoped<ProfilePackingListService>();
 builder.Services.AddScoped<ISmartPackingStore, EfSmartPackingStore>();
@@ -151,8 +151,10 @@ api.MapPut("/profile-packing-lists/{packingListId:guid}/items/{clothingItemId:gu
 });
 api.MapGet("/trips/{tripId:guid}/weather", async (Guid tripId, ISmartPackingStore store, OpenMeteoWeatherProvider weatherProvider, CancellationToken cancellationToken) =>
 {
-    var user = await store.GetDefaultUserAsync(cancellationToken); var trip = await store.GetTripAsync(user.Id, tripId, cancellationToken);
-    if (trip is null) return Results.NotFound(); var forecast = await weatherProvider.GetAsync(trip.Destination, trip.StartDate, trip.EndDate, cancellationToken);
+    var user = await store.GetDefaultUserAsync(cancellationToken);
+    var trip = await store.GetTripAsync(user.Id, tripId, cancellationToken);
+    if (trip is null) return Results.NotFound();
+    var forecast = await weatherProvider.GetAsync(trip.Destination, trip.StartDate, trip.EndDate, cancellationToken);
     return forecast is null ? Results.NotFound(new { message = "La previsión solo está disponible para los próximos 16 días." }) : Results.Ok(forecast);
 });
 api.MapGet("/trips/{tripId:guid}/checklist", async (Guid tripId, ISmartPackingStore store, CancellationToken cancellationToken) =>
@@ -205,12 +207,6 @@ static IReadOnlyList<ChecklistItem> CreateDefaultChecklist(Guid tripId) =>
     new(Guid.NewGuid(), tripId, ChecklistCategory.Other, "Botella reutilizable", false)
 ];
 
-app.Run();
+await app.RunAsync();
 
-public partial class Program;
-public sealed record SetPackedRequest(bool IsPacked);
-public sealed record UpdateClothingStatusRequest(bool IsClean, bool IsAvailable);
-public sealed record CreateChecklistItemRequest(ChecklistCategory Category, string Name);
-public sealed record CreateTripRequest(string Destination, DateOnly StartDate, DateOnly EndDate, int MinimumTemperatureCelsius, int MaximumTemperatureCelsius, IReadOnlyCollection<Style> Activities);
-public sealed record CreateFamilyProfileRequest(string Name);
-public sealed record SetTripProfilesRequest(IReadOnlyCollection<Guid> ProfileIds);
+public partial class Program { private Program() { } }
