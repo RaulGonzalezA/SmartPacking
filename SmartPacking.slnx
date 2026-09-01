@@ -11,5 +11,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/SmartPacking.Application.Tests/SmartPacking.Application.Tests.csproj" />
     <Project Path="tests/SmartPacking.Api.IntegrationTests/SmartPacking.Api.IntegrationTests.csproj" />
+    <Project Path="tests/SmartPacking.Web.Tests/SmartPacking.Web.Tests.csproj" />
   </Folder>
 </Solution>

@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="FluentAssertions" Version="7.0.0" />
+    <PackageVersion Include="bunit" Version="2.9.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />

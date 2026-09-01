@@ -1,0 +1,35 @@
+<main>
+    <p class="eyebrow">TU ARMARIO · TU VIAJE · TU MALETA</p>
+    <h1>Maleta Inteligente</h1>
+    <nav class="tabs" aria-label="Secciones">
+        @foreach (var tab in Tabs)
+        {
+            <button class="tab @(ActiveTab == tab.Key ? "active" : "")" disabled="@IsBusy" @onclick="() => ActiveTabChanged.InvokeAsync(tab.Key)">@tab.Value</button>
+        }
+    </nav>
+    @if (!string.IsNullOrWhiteSpace(Feedback))
+    {
+        <p class="feedback">@Feedback</p>
+    }
+    @if (IsLoading)
+    {
+        <p class="muted" role="status">Cargando…</p>
+    }
+    @ChildContent
+</main>
+
+@code {
+    private static readonly IReadOnlyDictionary<string, string> Tabs = new Dictionary<string, string>
+    {
+        ["trips"] = "Viajes",
+        ["wardrobe"] = "Armario",
+        ["packing"] = "Maleta"
+    };
+
+    [Parameter, EditorRequired] public string ActiveTab { get; set; } = "trips";
+    [Parameter, EditorRequired] public EventCallback<string> ActiveTabChanged { get; set; }
+    [Parameter] public string? Feedback { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+}

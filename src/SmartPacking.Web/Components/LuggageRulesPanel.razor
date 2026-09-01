@@ -1,0 +1,17 @@
+@using SmartPacking.Application
+
+@if (Rules is not null)
+{
+    <section class="family-section">
+        <h2>Capacidad de la maleta</h2>
+        <p class="@(Rules.IsWithinAllowance ? "muted" : "feedback")">@Rules.PlannedWeightGrams g de @Rules.AllowanceGrams g · @(Rules.IsWithinAllowance ? $"Quedan {Rules.RemainingGrams} g" : $"Exceso de {-Rules.RemainingGrams} g")</p>
+        <div class="capacity-track" aria-label="Capacidad ocupada"><i class="@(Rules.IsWithinAllowance ? string.Empty : "over-capacity")" style="width:@Percent%"></i></div>
+        <p class="muted">@Percent% del límite de peso utilizado.</p>
+        @if (Rules.CabinOnly) { <p class="muted">Cabina: recipientes de hasta @Rules.LiquidContainerMaximumMilliliters ml, en una bolsa de hasta @Rules.CabinLiquidsBagMaximumMilliliters ml.</p> }
+    </section>
+}
+
+@code {
+    [Parameter] public LuggageRulesSummary? Rules { get; set; }
+    private int Percent => Rules is null || Rules.AllowanceGrams == 0 ? 0 : Math.Min(100, (int)Math.Round(Rules.PlannedWeightGrams * 100m / Rules.AllowanceGrams));
+}

@@ -1,0 +1,10 @@
+<section class="preparation-summary">
+    <h2>Estado de preparación</h2>
+    <div class="progress-cards">
+        @foreach (var item in Items) { <article><strong>@item.Name</strong><span>@item.PackedClothing de @item.TotalClothing prendas · @item.PackedChecklist de @item.TotalChecklist imprescindibles</span><div class="progress-track"><i style="width:@item.Percent%"></i></div><small>@item.Percent% preparado</small></article> }
+    </div>
+</section>
+
+@code {
+    [Parameter] public IReadOnlyList<PreparationProgressItem> Items { get; set; } = [];
+}
