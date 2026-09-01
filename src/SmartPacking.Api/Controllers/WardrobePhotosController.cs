@@ -18,13 +18,15 @@ public sealed class WardrobePhotosController(ISmartPackingStore store, IPhotoSto
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        if (!(await store.GetWardrobeAsync(user.Id, cancellationToken)).Any(item => item.Id == clothingItemId))
+        var clothingItem = (await store.GetWardrobeAsync(user.Id, cancellationToken)).SingleOrDefault(item => item.Id == clothingItemId);
+        if (clothingItem is null)
         {
             return Problem(statusCode: StatusCodes.Status404NotFound, title: "Prenda no encontrada");
         }
 
         await using var photoStream = photo.OpenReadStream();
         var imageUrl = await photoStorage.SaveJpegAsync(clothingItemId, photoStream, cancellationToken);
+        await store.UpdateClothingItemAsync(user.Id, clothingItem with { PhotoUrl = imageUrl }, cancellationToken);
         return Ok(new ApiResult<PhotoUploadResponse>(new PhotoUploadResponse(imageUrl)));
     }
 

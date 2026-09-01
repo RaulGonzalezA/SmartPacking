@@ -1,0 +1,39 @@
+@using SmartPacking.Domain
+
+@using Microsoft.AspNetCore.Components.Forms
+
+<section class="wardrobe">
+    <div class="section-heading"><h2>Mi armario</h2><button @onclick="() => showForm = !showForm">Añadir prenda</button></div>
+    @if (showForm)
+    {
+        <EditForm Model="input" OnValidSubmit="SaveAsync" class="entry-form"><label>Nombre <InputText @bind-Value="input.Name" /></label><label>Propietario <select @bind="input.OwnerId">@foreach (var profile in Profiles.Where(profile => !profile.IsArchived)) { <option value="@profile.Id">@profile.Name</option> }</select></label><label>Tipo <select @bind="input.Type" @bind:after="ApplyDefaultWeight">@foreach (var type in Enum.GetValues<ClothingType>()) { <option value="@type">@TypeName(type)</option> }</select></label><label>Color <InputText @bind-Value="input.Color" /></label><label>Peso (g) <InputNumber @bind-Value="input.WeightGrams" /></label><button>Guardar</button></EditForm>
+    }
+    <div class="wardrobe-items">@foreach (var item in Items) { <article class="wardrobe-item">@if (photoUrls.TryGetValue(item.Id, out var uploadedPhotoUrl) || !string.IsNullOrWhiteSpace(item.PhotoUrl)) { <img class="clothing-photo" src="@(uploadedPhotoUrl ?? item.PhotoUrl)" alt="@item.Name" /> } else { <span class="clothing-placeholder" aria-hidden="true">👕</span> }<div><strong>@item.Name</strong><span class="wardrobe-meta">@item.Color · @item.WeightGrams g · @OwnerName(item.OwnerProfileId)</span></div><label class="photo-upload">Foto <InputFile OnChange="file => UploadPhotoAsync(item.Id, file)" accept="image/jpeg" /></label><label><input type="checkbox" checked="@item.IsClean" @onchange="args => Changed.InvokeAsync((item, args.Value is bool clean && clean, item.IsAvailable))" /> Limpia</label><label><input type="checkbox" checked="@item.IsAvailable" @onchange="args => Changed.InvokeAsync((item, item.IsClean, args.Value is bool available && available))" /> Disponible</label><button class="danger" @onclick="() => Removed.InvokeAsync(item.Id)">Retirar</button></article> }</div>
+</section>
+<section class="wardrobe"><h2>Prendas retiradas</h2><div class="wardrobe-items">@foreach (var item in DeletedItems) { <article class="wardrobe-item"><strong>@item.Name</strong><button @onclick="() => Restored.InvokeAsync(item.Id)">Recuperar</button></article> }</div></section>
+
+@code {
+    private readonly Input input = new();
+    private bool showForm;
+    [Parameter, EditorRequired] public IReadOnlyList<ClothingItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<ClothingItem> DeletedItems { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<FamilyProfile> Profiles { get; set; } = [];
+    [Parameter, EditorRequired] public EventCallback<(string Name, string Color, Guid OwnerId, ClothingType Type, int WeightGrams)> Created { get; set; }
+    [Parameter, EditorRequired] public EventCallback<(ClothingItem Item, bool Clean, bool Available)> Changed { get; set; }
+    [Parameter, EditorRequired] public EventCallback<Guid> Removed { get; set; }
+    [Parameter, EditorRequired] public EventCallback<Guid> Restored { get; set; }
+    [Parameter, EditorRequired] public EventCallback<(Guid ItemId, IBrowserFile File)> PhotoSelected { get; set; }
+    private readonly Dictionary<Guid, string> photoUrls = [];
+    private async Task SaveAsync() { await Created.InvokeAsync((input.Name, input.Color, input.OwnerId, input.Type, input.WeightGrams)); input.Name = string.Empty; input.Color = string.Empty; showForm = false; }
+    private async Task UploadPhotoAsync(Guid itemId, InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        await PhotoSelected.InvokeAsync((itemId, file));
+    }
+    public void SetPhotoUrl(Guid itemId, string url) => photoUrls[itemId] = url;
+    private void ApplyDefaultWeight() => input.WeightGrams = DefaultWeight(input.Type);
+    private static int DefaultWeight(ClothingType type) => type switch { ClothingType.TShirt => 180, ClothingType.Trousers => 500, ClothingType.Shorts => 250, ClothingType.Jacket => 800, ClothingType.Shoes => 900, ClothingType.Sandals => 450, _ => 100 };
+    private static string TypeName(ClothingType type) => type switch { ClothingType.TShirt => "Camiseta", ClothingType.Trousers => "Pantalón", ClothingType.Shorts => "Pantalón corto", ClothingType.Jacket => "Chaqueta", ClothingType.Shoes => "Zapatos", ClothingType.Sandals => "Sandalias", _ => "Accesorio" };
+    private string OwnerName(Guid? ownerId) => Profiles.FirstOrDefault(profile => profile.Id == ownerId)?.Name ?? "Sin asignar";
+    private sealed class Input { public string Name { get; set; } = string.Empty; public string Color { get; set; } = string.Empty; public Guid OwnerId { get; set; } public ClothingType Type { get; set; } = ClothingType.TShirt; public int WeightGrams { get; set; } = 180; }
+}

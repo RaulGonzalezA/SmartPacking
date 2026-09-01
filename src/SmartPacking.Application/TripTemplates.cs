@@ -35,5 +35,5 @@ public sealed record LuggageRulesSummary(
     int LiquidContainerMaximumMilliliters,
     int CabinLiquidsBagMaximumMilliliters);
 
-public sealed record DailyTripForecast(DateOnly Date, decimal MinimumCelsius, decimal MaximumCelsius, int RainProbability);
+public sealed record DailyTripForecast(DateOnly Date, decimal MinimumCelsius, decimal MaximumCelsius, int RainProbability, int WeatherCode, decimal? ApparentMinimumCelsius = null, decimal? ApparentMaximumCelsius = null, decimal? WindSpeedKilometresPerHour = null);
 public sealed record TripWeatherForecast(string Destination, decimal MinimumCelsius, decimal MaximumCelsius, int RainProbability, DateOnly StartDate, DateOnly EndDate, IReadOnlyList<DailyTripForecast> Daily);

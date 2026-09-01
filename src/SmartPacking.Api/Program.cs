@@ -51,7 +51,15 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddScoped<PackingListService>();
 builder.Services.AddScoped<ProfilePackingListService>();
 builder.Services.AddScoped<ISmartPackingStore, EfSmartPackingStore>();
-builder.Services.AddMemoryCache();
+var redisConnectionString = builder.Configuration["Cache:RedisConnectionString"];
+if (string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+else
+{
+    builder.Services.AddStackExchangeRedisCache(options => options.Configuration = redisConnectionString);
+}
 builder.Services.AddHttpClient<OpenMeteoWeatherProvider>(client => client.Timeout = TimeSpan.FromSeconds(10)).AddStandardResilienceHandler();
 var connectionString = builder.Configuration.GetConnectionString("SmartPacking") ?? "Data Source=smartpacking.db";
 builder.Services.AddDbContext<SmartPackingDbContext>(options =>

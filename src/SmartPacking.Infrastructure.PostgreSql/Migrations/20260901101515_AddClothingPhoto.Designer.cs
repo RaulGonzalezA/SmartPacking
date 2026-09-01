@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SmartPacking.Infrastructure;
@@ -11,9 +12,11 @@ using SmartPacking.Infrastructure;
 namespace SmartPacking.Infrastructure.PostgreSql.Migrations
 {
     [DbContext(typeof(SmartPackingDbContext))]
-    partial class SmartPackingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260901101515_AddClothingPhoto")]
+    partial class AddClothingPhoto
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -151,14 +154,8 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("MedicalNotes")
-                        .HasColumnType("text");
-
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PackingNotes")
                         .HasColumnType("text");
 
                     b.Property<Guid>("UserId")

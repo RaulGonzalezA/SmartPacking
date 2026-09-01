@@ -32,6 +32,6 @@ public sealed class PackingListService(ISmartPackingStore store)
                     ?? new RecommendedItem(wardrobeByItem[item.ClothingItemId], 0, ["retirada del armario; se conserva por ser una maleta existente"]),
                 item.IsPacked))
             .ToArray();
-        return new TripPackingPlan(trip, packingList.Id, items, items.Sum(item => item.Recommendation.Item.WeightGrams ?? 0));
+        return new TripPackingPlan(trip, packingList.Id, items, items.Where(item => item.IsPacked).Sum(item => item.Recommendation.Item.WeightGrams ?? 0));
     }
 }

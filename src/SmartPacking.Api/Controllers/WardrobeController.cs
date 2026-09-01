@@ -19,7 +19,7 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var items = (await store.GetWardrobeAsync(user.Id, cancellationToken)).Where(item => !item.IsDeleted).Skip((page - 1) * pageSize).Take(pageSize).Select(item => item.ToResponse()).ToArray();
+        var items = (await store.GetWardrobePageAsync(user.Id, false, page, pageSize, cancellationToken)).Select(item => item.ToResponse()).ToArray();
         return Ok(new ApiResult<IReadOnlyList<ClothingItemResponse>>(items));
     }
 
@@ -32,7 +32,7 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var items = (await store.GetWardrobeAsync(user.Id, cancellationToken)).Where(item => item.IsDeleted).Skip((page - 1) * pageSize).Take(pageSize).Select(item => item.ToResponse()).ToArray();
+        var items = (await store.GetWardrobePageAsync(user.Id, true, page, pageSize, cancellationToken)).Select(item => item.ToResponse()).ToArray();
         return Ok(new ApiResult<IReadOnlyList<ClothingItemResponse>>(items));
     }
 

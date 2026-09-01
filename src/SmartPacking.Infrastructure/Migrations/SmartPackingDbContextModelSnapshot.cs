@@ -33,6 +33,9 @@ namespace SmartPacking.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ProfileId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("TripId")
                         .HasColumnType("TEXT");
 
@@ -74,6 +77,9 @@ namespace SmartPacking.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("OwnerProfileId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PhotoUrl")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("PreferenceScore")
@@ -140,8 +146,14 @@ namespace SmartPacking.Infrastructure.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("MedicalNotes")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PackingNotes")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("UserId")

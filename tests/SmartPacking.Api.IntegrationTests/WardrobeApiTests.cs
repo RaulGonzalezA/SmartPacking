@@ -91,6 +91,11 @@ public sealed class WardrobeApiTests : IAsyncLifetime
 
         var packingList = await client.GetAsync($"/api/trips/{tripId}/profiles/{profileId}/packing-list");
         packingList.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var checklist = await client.GetFromJsonAsync<ChecklistItem[]>($"/api/trips/{tripId}/profiles/{profileId}/checklist");
+        checklist.Should().NotBeNull();
+        checklist.Should().Contain(item => item.Category == ChecklistCategory.Toiletries && item.Name.Contains("pasta", StringComparison.OrdinalIgnoreCase));
+        checklist.Should().OnlyContain(item => item.ProfileId == profileId);
     }
 
     public Task DisposeAsync()

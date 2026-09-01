@@ -25,7 +25,7 @@ public sealed class ProfilesController(ISmartPackingStore store, ProfilePackingL
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var profile = await store.AddFamilyProfileAsync(user.Id, new FamilyProfile(Guid.NewGuid(), request.Name.Trim()), cancellationToken);
+        var profile = await store.AddFamilyProfileAsync(user.Id, new FamilyProfile(Guid.NewGuid(), request.Name.Trim(), false, request.PackingNotes?.Trim(), request.MedicalNotes?.Trim()), cancellationToken);
         return Created($"/api/profiles/{profile.Id}", profile);
     }
 
@@ -38,7 +38,7 @@ public sealed class ProfilesController(ISmartPackingStore store, ProfilePackingL
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var profile = await store.UpdateFamilyProfileAsync(user.Id, new FamilyProfile(profileId, request.Name.Trim()), cancellationToken);
+        var profile = await store.UpdateFamilyProfileAsync(user.Id, new FamilyProfile(profileId, request.Name.Trim(), false, request.PackingNotes?.Trim(), request.MedicalNotes?.Trim()), cancellationToken);
         return profile is null ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Viajero no encontrado") : Ok(profile);
     }
 

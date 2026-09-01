@@ -54,6 +54,8 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
         }
 
         entity.Name = profile.Name;
+        entity.PackingNotes = profile.PackingNotes;
+        entity.MedicalNotes = profile.MedicalNotes;
         await dbContext.SaveChangesAsync(cancellationToken);
         return ToDomain(entity);
     }
@@ -81,7 +83,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
                 join profile in dbContext.FamilyProfiles on link.ProfileId equals profile.Id
                 where link.UserId == userId && link.TripId == tripId && profile.UserId == userId
                 orderby profile.Name
-                select new FamilyProfile(profile.Id, profile.Name, profile.IsArchived)).ToListAsync(cancellationToken));
+                select new FamilyProfile(profile.Id, profile.Name, profile.IsArchived, profile.PackingNotes, profile.MedicalNotes)).ToListAsync(cancellationToken));
 
     public async Task SetTripProfilesAsync(Guid userId, Guid tripId, IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken)
     {
@@ -94,6 +96,16 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
 
     public async Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(Guid userId, CancellationToken cancellationToken) =>
         (await dbContext.ClothingItems.Where(item => item.UserId == userId).OrderBy(item => item.Name).ToListAsync(cancellationToken)).Select(ToDomain).ToArray();
+
+    public async Task<IReadOnlyList<ClothingItem>> GetWardrobePageAsync(Guid userId, bool isDeleted, int page, int pageSize, CancellationToken cancellationToken) =>
+        (await dbContext.ClothingItems
+            .Where(item => item.UserId == userId && item.IsDeleted == isDeleted)
+            .OrderBy(item => item.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken))
+        .Select(ToDomain)
+        .ToArray();
 
     public async Task<ClothingItem> AddClothingItemAsync(Guid userId, ClothingItem item, CancellationToken cancellationToken)
     {
@@ -150,6 +162,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
         entity.PreferenceScore = item.PreferenceScore;
         entity.IsDeleted = item.IsDeleted;
         entity.OwnerProfileId = item.OwnerProfileId;
+        entity.PhotoUrl = item.PhotoUrl;
         entity.CombinationIds = JsonSerializer.Serialize(item.CombinesWith);
         await dbContext.SaveChangesAsync(cancellationToken);
         return ToDomain(entity);
@@ -170,12 +183,33 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     }
 
     public async Task<IReadOnlyList<Trip>> GetTripsAsync(Guid userId, CancellationToken cancellationToken) =>
-        (await dbContext.Trips.Where(item => item.UserId == userId).OrderBy(item => item.StartDate).ToListAsync(cancellationToken)).Select(ToDomain).ToArray();
+        (await dbContext.Trips.Where(item => item.UserId == userId).OrderByDescending(item => item.StartDate).ToListAsync(cancellationToken)).Select(ToDomain).ToArray();
 
     public async Task<Trip> AddTripAsync(Guid userId, Trip trip, CancellationToken cancellationToken)
     {
         var entity = ToEntity(userId, trip with { Id = trip.Id == Guid.Empty ? Guid.NewGuid() : trip.Id });
         dbContext.Trips.Add(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDomain(entity);
+    }
+
+    public async Task<Trip?> UpdateTripAsync(Guid userId, Trip trip, CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.Trips.SingleOrDefaultAsync(candidate => candidate.UserId == userId && candidate.Id == trip.Id, cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        entity.Destination = trip.Destination;
+        entity.StartDate = trip.StartDate;
+        entity.EndDate = trip.EndDate;
+        entity.MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius;
+        entity.MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius;
+        entity.Activities = JsonSerializer.Serialize(trip.Activities);
+        entity.TemplateKey = trip.TemplateKey;
+        entity.LuggageAllowanceGrams = trip.LuggageAllowanceGrams;
+        entity.CabinOnly = trip.CabinOnly;
         await dbContext.SaveChangesAsync(cancellationToken);
         return ToDomain(entity);
     }
@@ -284,11 +318,30 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ChecklistItem>> GetChecklistAsync(Guid userId, Guid tripId, CancellationToken cancellationToken) =>
-        (await dbContext.ChecklistItems.Where(item => item.UserId == userId && item.TripId == tripId).OrderBy(item => item.Category).ThenBy(item => item.Name).ToListAsync(cancellationToken)).Select(item => new ChecklistItem(item.Id, item.TripId, (ChecklistCategory)item.Category, item.Name, item.IsPacked)).ToArray();
+    public async Task<bool> AddProfilePackingListItemAsync(Guid userId, Guid packingListId, Guid clothingItemId, CancellationToken cancellationToken)
+    {
+        var exists = await dbContext.ProfilePackingLists.AnyAsync(list => list.UserId == userId && list.Id == packingListId, cancellationToken);
+        var clothingExists = await dbContext.ClothingItems.AnyAsync(item => item.UserId == userId && item.Id == clothingItemId && !item.IsDeleted, cancellationToken);
+        if (!exists || !clothingExists)
+        {
+            return false;
+        }
+
+        var alreadyAdded = await dbContext.ProfilePackingListItems.AnyAsync(item => item.PackingListId == packingListId && item.ClothingItemId == clothingItemId, cancellationToken);
+        if (!alreadyAdded)
+        {
+            dbContext.ProfilePackingListItems.Add(new ProfilePackingListItemEntity { PackingListId = packingListId, ClothingItemId = clothingItemId, IsPacked = true });
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return true;
+    }
+
+    public async Task<IReadOnlyList<ChecklistItem>> GetChecklistAsync(Guid userId, Guid tripId, Guid? profileId, CancellationToken cancellationToken) =>
+        (await dbContext.ChecklistItems.Where(item => item.UserId == userId && item.TripId == tripId && item.ProfileId == profileId).OrderBy(item => item.Category).ThenBy(item => item.Name).ToListAsync(cancellationToken)).Select(item => new ChecklistItem(item.Id, item.TripId, (ChecklistCategory)item.Category, item.Name, item.IsPacked, item.ProfileId)).ToArray();
     public async Task<IReadOnlyList<ChecklistItem>> AddChecklistItemsAsync(Guid userId, IReadOnlyCollection<ChecklistItem> items, CancellationToken cancellationToken)
     {
-        dbContext.ChecklistItems.AddRange(items.Select(item => new ChecklistItemEntity { Id = item.Id, UserId = userId, TripId = item.TripId, Category = (int)item.Category, Name = item.Name, IsPacked = item.IsPacked }));
+        dbContext.ChecklistItems.AddRange(items.Select(item => new ChecklistItemEntity { Id = item.Id, UserId = userId, TripId = item.TripId, ProfileId = item.ProfileId, Category = (int)item.Category, Name = item.Name, IsPacked = item.IsPacked }));
         await dbContext.SaveChangesAsync(cancellationToken);
         return items.ToArray();
     }
@@ -326,10 +379,11 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
         PreferenceScore = item.PreferenceScore,
         IsDeleted = item.IsDeleted,
         OwnerProfileId = item.OwnerProfileId,
+        PhotoUrl = item.PhotoUrl,
         CombinationIds = JsonSerializer.Serialize(item.CombinesWith)
     };
-    private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId);
-    private static FamilyProfile ToDomain(FamilyProfileEntity profile) => new(profile.Id, profile.Name, profile.IsArchived);
+    private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId, item.PhotoUrl);
+    private static FamilyProfile ToDomain(FamilyProfileEntity profile) => new(profile.Id, profile.Name, profile.IsArchived, profile.PackingNotes, profile.MedicalNotes);
     private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities), TemplateKey = trip.TemplateKey, LuggageAllowanceGrams = trip.LuggageAllowanceGrams, CabinOnly = trip.CabinOnly };
     private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? [], trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly);
 #pragma warning restore S4136

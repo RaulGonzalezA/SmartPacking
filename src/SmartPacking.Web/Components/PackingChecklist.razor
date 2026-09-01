@@ -1,0 +1,33 @@
+@using SmartPacking.Domain
+
+@if (Items.Count > 0)
+{
+    <section class="family-section">
+        <h2>Imprescindibles del viaje</h2>
+        <p class="muted">Objetos que no pertenecen al armario: documentos, higiene, tecnología y salud.</p>
+        @foreach (var category in Items.GroupBy(item => item.Category))
+        {
+            <h3>@CategoryName(category.Key)</h3>
+            <div class="profile-items">
+                @foreach (var item in category)
+                {
+                    <label class="profile-item"><input type="checkbox" checked="@item.IsPacked" @onchange="args => OnPackedChanged.InvokeAsync((item, args.Value is bool packed && packed))" /> @item.Name</label>
+                }
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ChecklistItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public EventCallback<(ChecklistItem Item, bool IsPacked)> OnPackedChanged { get; set; }
+
+    private static string CategoryName(ChecklistCategory category) => category switch
+    {
+        ChecklistCategory.Documents => "Documentación",
+        ChecklistCategory.Toiletries => "Higiene",
+        ChecklistCategory.Technology => "Tecnología",
+        ChecklistCategory.Health => "Salud y medicación",
+        _ => "Otros imprescindibles"
+    };
+}

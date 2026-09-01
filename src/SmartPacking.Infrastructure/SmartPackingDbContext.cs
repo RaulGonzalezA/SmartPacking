@@ -60,6 +60,7 @@ public sealed class ClothingItemEntity
     public int PreferenceScore { get; set; }
     public bool IsDeleted { get; set; }
     public Guid? OwnerProfileId { get; set; }
+    public string? PhotoUrl { get; set; }
     public string CombinationIds { get; set; } = "[]";
 }
 public sealed class TripEntity
@@ -78,9 +79,9 @@ public sealed class TripEntity
 }
 public sealed class PackingListEntity { public Guid Id { get; set; } public Guid TripId { get; set; } public Guid UserId { get; set; } public DateTimeOffset CreatedAt { get; set; } }
 public sealed class PackingListItemEntity { public Guid PackingListId { get; set; } public Guid ClothingItemId { get; set; } public bool IsPacked { get; set; } }
-public sealed class ChecklistItemEntity { public Guid Id { get; set; } public Guid UserId { get; set; } public Guid TripId { get; set; } public int Category { get; set; } public string Name { get; set; } = string.Empty; public bool IsPacked { get; set; } }
+public sealed class ChecklistItemEntity { public Guid Id { get; set; } public Guid UserId { get; set; } public Guid TripId { get; set; } public Guid? ProfileId { get; set; } public int Category { get; set; } public string Name { get; set; } = string.Empty; public bool IsPacked { get; set; } }
 public sealed class ClothingUsageEntity { public Guid TripId { get; set; } public Guid ClothingItemId { get; set; } public Guid UserId { get; set; } public bool WasUsed { get; set; } }
-public sealed class FamilyProfileEntity { public Guid Id { get; set; } public Guid UserId { get; set; } public string Name { get; set; } = string.Empty; public bool IsArchived { get; set; } }
+public sealed class FamilyProfileEntity { public Guid Id { get; set; } public Guid UserId { get; set; } public string Name { get; set; } = string.Empty; public bool IsArchived { get; set; } public string? PackingNotes { get; set; } public string? MedicalNotes { get; set; } }
 public sealed class TripProfileEntity { public Guid TripId { get; set; } public Guid ProfileId { get; set; } public Guid UserId { get; set; } }
 public sealed class ProfilePackingListEntity { public Guid Id { get; set; } public Guid TripId { get; set; } public Guid ProfileId { get; set; } public Guid UserId { get; set; } public DateTimeOffset CreatedAt { get; set; } }
 public sealed class ProfilePackingListItemEntity { public Guid PackingListId { get; set; } public Guid ClothingItemId { get; set; } public bool IsPacked { get; set; } }

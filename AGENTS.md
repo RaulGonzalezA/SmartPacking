@@ -69,6 +69,15 @@ Build:
 dotnet build SmartPacking.slnx --configuration Release --no-restore
 ```
 
+Formatting verification (mandatory before completing C# or Razor changes):
+
+```powershell
+dotnet format SmartPacking.slnx --verify-no-changes --no-restore
+```
+
+If it fails, run `dotnet format SmartPacking.slnx --no-restore` and verify it
+again. Do not deliver formatting or analyzer failures.
+
 Tests:
 
 ```powershell
@@ -83,6 +92,7 @@ dotnet run --project src\SmartPacking.Api
 
 ## Definition of Done
 
+- Formatting verification passes for C# or Razor changes.
 - Affected projects build without new warnings.
 - Relevant tests pass.
 - API and persisted-data changes are explicitly reported.

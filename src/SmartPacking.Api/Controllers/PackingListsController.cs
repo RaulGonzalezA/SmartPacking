@@ -24,6 +24,15 @@ public sealed class PackingListsController(ISmartPackingStore store) : Controlle
         return NoContent();
     }
 
+    [HttpPost("profile-packing-lists/{packingListId:guid}/items")]
+    public async Task<IActionResult> AddProfilePackedItemAsync(Guid packingListId, AddPackingListItemRequest request, CancellationToken cancellationToken)
+    {
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        return await store.AddProfilePackingListItemAsync(user.Id, packingListId, request.ClothingItemId, cancellationToken)
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "Prenda o maleta no encontrada");
+    }
+
     [HttpPut("checklist/{itemId:guid}")]
     public async Task<IActionResult> SetChecklistPackedAsync(Guid itemId, SetPackedRequest request, CancellationToken cancellationToken)
     {

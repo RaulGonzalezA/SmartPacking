@@ -17,7 +17,7 @@ services:
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
-    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --skipApiVersionCheck
     ports:
       - "10000:10000"
     volumes:
@@ -27,11 +27,19 @@ services:
     image: datalust/seq:2026.1
     environment:
       ACCEPT_EULA: Y
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
     ports:
-      - "5341:80"
-      - "5342:5341"
+      - "5343:80"
+      - "5344:5341"
     volumes:
       - seq-data:/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
 
   api:
     build:
@@ -41,11 +49,12 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__SmartPacking: Host=postgres;Port=5432;Database=smartpacking;Username=smartpacking;Password=smartpacking
-      Storage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNoGFBlRgpFTuBlZ8eBv+K6qK2ZJ+4ZEdE1M3T2h+Q2QZfYxYw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      Storage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
       Storage__PublicBaseUrl: http://localhost:10000/devstoreaccount1
       Storage__Container: wardrobe
       Observability__SeqUrl: http://seq:80
       Observability__OtlpEndpoint: http://seq:5341/ingest/otlp
+      Cache__RedisConnectionString: redis:6379
     ports:
       - "8080:8080"
     depends_on:
@@ -54,6 +63,8 @@ services:
       azurite:
         condition: service_started
       seq:
+        condition: service_started
+      redis:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/health"]
@@ -81,3 +92,4 @@ volumes:
   postgres-data:
   azurite-data:
   seq-data:
+  redis-data:

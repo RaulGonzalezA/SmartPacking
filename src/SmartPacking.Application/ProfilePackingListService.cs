@@ -25,7 +25,7 @@ public sealed class ProfilePackingListService(ISmartPackingStore store)
         var items = packingList.Items.Where(item => wardrobeByItem.ContainsKey(item.ClothingItemId)).Select(item => new PlannedItem(
             recommendationByItem.GetValueOrDefault(item.ClothingItemId)
                 ?? new RecommendedItem(wardrobeByItem[item.ClothingItemId], 0, ["retirada del armario; se conserva por ser una maleta existente"]), item.IsPacked)).ToArray();
-        var plan = new TripPackingPlan(trip, packingList.Id, items, items.Sum(item => item.Recommendation.Item.WeightGrams ?? 0));
+        var plan = new TripPackingPlan(trip, packingList.Id, items, items.Where(item => item.IsPacked).Sum(item => item.Recommendation.Item.WeightGrams ?? 0));
         return new ProfileTripPackingPlan(profile, plan);
     }
 }
