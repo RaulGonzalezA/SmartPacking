@@ -3,8 +3,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace SmartPacking.Infrastructure.PostgreSql.Migrations
-{
+namespace SmartPacking.Infrastructure.PostgreSql.Migrations;
+
+#pragma warning disable CA1861 // EF-generated migration metadata.
     /// <inheritdoc />
     public partial class AddUserTripTemplates : Migration
     {
@@ -44,4 +45,4 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                 name: "UserTripTemplates");
         }
     }
-}
+#pragma warning restore CA1861
