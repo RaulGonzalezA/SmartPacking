@@ -332,6 +332,47 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
 
                     b.ToTable("Users");
                 });
+
+            modelBuilder.Entity("SmartPacking.Infrastructure.UserTripTemplateEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Activities")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("CabinOnly")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("LuggageAllowanceGrams")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaximumTemperatureCelsius")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MinimumTemperatureCelsius")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("UserTripTemplates");
+                });
 #pragma warning restore 612, 618
         }
     }

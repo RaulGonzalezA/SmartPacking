@@ -9,6 +9,30 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
 {
     private static readonly Guid DefaultUserId = Guid.Parse("90ae4435-5a54-42dc-a0a4-4f8aa4d96f90");
 
+    public async Task<IReadOnlyList<UserTripTemplate>> GetUserTripTemplatesAsync(Guid userId, CancellationToken cancellationToken) =>
+        (await dbContext.UserTripTemplates.Where(template => template.UserId == userId).OrderBy(template => template.Name).ToListAsync(cancellationToken)).Select(ToDomain).ToArray();
+
+    public async Task<UserTripTemplate> AddUserTripTemplateAsync(UserTripTemplate userTemplate, CancellationToken cancellationToken)
+    {
+        var entity = new UserTripTemplateEntity { Id = userTemplate.Id == Guid.Empty ? Guid.NewGuid() : userTemplate.Id, UserId = userTemplate.UserId, Name = userTemplate.Name, Description = userTemplate.Description, Activities = JsonSerializer.Serialize(userTemplate.Activities), MinimumTemperatureCelsius = userTemplate.MinimumTemperatureCelsius, MaximumTemperatureCelsius = userTemplate.MaximumTemperatureCelsius, LuggageAllowanceGrams = userTemplate.LuggageAllowanceGrams, CabinOnly = userTemplate.CabinOnly };
+        dbContext.UserTripTemplates.Add(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDomain(entity);
+    }
+
+    public async Task<bool> DeleteUserTripTemplateAsync(Guid userId, Guid templateId, CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.UserTripTemplates.SingleOrDefaultAsync(template => template.UserId == userId && template.Id == templateId, cancellationToken);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        dbContext.UserTripTemplates.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
         if (await dbContext.Users.AnyAsync(cancellationToken))
@@ -384,6 +408,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     };
     private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId, item.PhotoUrl);
     private static FamilyProfile ToDomain(FamilyProfileEntity profile) => new(profile.Id, profile.Name, profile.IsArchived, profile.PackingNotes, profile.MedicalNotes);
+    private static UserTripTemplate ToDomain(UserTripTemplateEntity template) => new(template.Id, template.UserId, template.Name, template.Description, JsonSerializer.Deserialize<Style[]>(template.Activities) ?? [], template.MinimumTemperatureCelsius, template.MaximumTemperatureCelsius, template.LuggageAllowanceGrams, template.CabinOnly);
     private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities), TemplateKey = trip.TemplateKey, LuggageAllowanceGrams = trip.LuggageAllowanceGrams, CabinOnly = trip.CabinOnly };
     private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? [], trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly);
 #pragma warning restore S4136

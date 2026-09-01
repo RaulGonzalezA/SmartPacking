@@ -15,6 +15,7 @@ public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext
     public DbSet<TripProfileEntity> TripProfiles => Set<TripProfileEntity>();
     public DbSet<ProfilePackingListEntity> ProfilePackingLists => Set<ProfilePackingListEntity>();
     public DbSet<ProfilePackingListItemEntity> ProfilePackingListItems => Set<ProfilePackingListItemEntity>();
+    public DbSet<UserTripTemplateEntity> UserTripTemplates => Set<UserTripTemplateEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,6 +40,8 @@ public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext
         modelBuilder.Entity<ProfilePackingListEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<ProfilePackingListEntity>().HasIndex(entity => new { entity.UserId, entity.TripId, entity.ProfileId }).IsUnique();
         modelBuilder.Entity<ProfilePackingListItemEntity>().HasKey(entity => new { entity.PackingListId, entity.ClothingItemId });
+        modelBuilder.Entity<UserTripTemplateEntity>().HasKey(entity => entity.Id);
+        modelBuilder.Entity<UserTripTemplateEntity>().HasIndex(entity => new { entity.UserId, entity.Name }).IsUnique();
     }
 }
 
@@ -85,3 +88,4 @@ public sealed class FamilyProfileEntity { public Guid Id { get; set; } public Gu
 public sealed class TripProfileEntity { public Guid TripId { get; set; } public Guid ProfileId { get; set; } public Guid UserId { get; set; } }
 public sealed class ProfilePackingListEntity { public Guid Id { get; set; } public Guid TripId { get; set; } public Guid ProfileId { get; set; } public Guid UserId { get; set; } public DateTimeOffset CreatedAt { get; set; } }
 public sealed class ProfilePackingListItemEntity { public Guid PackingListId { get; set; } public Guid ClothingItemId { get; set; } public bool IsPacked { get; set; } }
+public sealed class UserTripTemplateEntity { public Guid Id { get; set; } public Guid UserId { get; set; } public string Name { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; public string Activities { get; set; } = "[]"; public int MinimumTemperatureCelsius { get; set; } public int MaximumTemperatureCelsius { get; set; } public int LuggageAllowanceGrams { get; set; } public bool CabinOnly { get; set; } }

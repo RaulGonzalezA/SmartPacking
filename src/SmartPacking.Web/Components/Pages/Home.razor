@@ -48,6 +48,7 @@
             @if (editingTraveller is not null) { <div class="quick-form"><label>Nombre <InputText @bind-Value="editingTravellerName" /></label><label>Notas de equipaje <InputText @bind-Value="editingTravellerPackingNotes" /></label><label>Salud y medicación <InputText @bind-Value="editingTravellerMedicalNotes" /></label><button @onclick="() => RunAsync(SaveTravellerNameAsync)">Guardar viajero</button><button type="button" @onclick="CancelEditingTraveller">Cancelar</button></div> }
         </section>
         @if (weather is not null) { <section class="family-section"><h2>Previsión diaria</h2><p class="muted">@weather.Destination · @weather.MinimumCelsius–@weather.MaximumCelsius °C · lluvia máxima @weather.RainProbability%</p>@if (weather.EndDate < SelectedTripEndDate) { <p class="muted">La previsión está disponible hasta el @weather.EndDate.ToString("d", CultureInfo.CurrentCulture). El resto del viaje aún queda fuera de la ventana de 16 días.</p> }<div class="weather-days">@foreach (var day in weather.Daily) { var condition = GetWeatherCondition(day.WeatherCode); <article class="weather-day"><span class="weather-icon" role="img" aria-label="@condition.Label">@condition.Icon</span><div><strong>@day.Date.ToString("ddd d", CultureInfo.CurrentCulture)</strong><span>@condition.Label</span></div><div class="weather-temperatures">@day.MinimumCelsius° / @day.MaximumCelsius°<small>🌡️ @day.ApparentMinimumCelsius–@day.ApparentMaximumCelsius° · 💨 @day.WindSpeedKilometresPerHour km/h</small><small>☔ @day.RainProbability%</small></div></article> }</div></section> }
+        @if (selectedTripId != Guid.Empty && trips.SingleOrDefault(trip => trip.Id == selectedTripId)?.GetStatus(DateOnly.FromDateTime(DateTime.Today)) == TripStatus.Completed) { <section class="family-section"><h2>Después del viaje</h2><p class="muted">Marca las prendas que realmente usaste; mejorará tus próximas recomendaciones.</p><div class="profile-items">@foreach (var item in wardrobe.Where(item => usageItemIds.Contains(item.Id))) { <label class="profile-item"><input type="checkbox" checked="@usedItemIds.Contains(item.Id)" @onchange="args => SetUsage(item.Id, args.Value)" /> @item.Name</label> }</div><button @onclick="() => RunAsync(SaveUsageAsync)">Guardar uso real</button></section> }
         else if (selectedTripId != Guid.Empty) { <p class="muted">@WeatherUnavailableMessage</p> }
     }
 
@@ -110,6 +111,8 @@
     private HashSet<Guid> tripProfileIds = [];
     private WardrobePanel? wardrobePanel;
     private IReadOnlyList<PreparationProgress> preparationProgress = [];
+    private HashSet<Guid> usageItemIds = [];
+    private HashSet<Guid> usedItemIds = [];
 
     private static readonly Guid DefaultProfileId = Guid.Parse("90ae4435-5a54-42dc-a0a4-4f8aa4d96f90");
     protected override async Task OnInitializedAsync() => await RunAsync(LoadAsync);
@@ -123,6 +126,9 @@
         await LoadPlanAsync();
         checklist = selectedProfileId == Guid.Empty ? [] : await Api.GetChecklistAsync(selectedTripId, selectedProfileId, CancellationToken.None);
         weather = await Api.GetWeatherAsync(selectedTripId, CancellationToken.None);
+        var usage = await Api.GetUsageAsync(selectedTripId, CancellationToken.None);
+        usageItemIds = usage.Count == 0 ? plan?.Plan.Items.Select(item => item.Recommendation.Item.Id).ToHashSet() ?? [] : usage.Select(item => item.ClothingItemId).ToHashSet();
+        usedItemIds = usage.Where(item => item.WasUsed).Select(item => item.ClothingItemId).ToHashSet();
         preparationProgress = await Task.WhenAll(tripProfiles.Select(async profile =>
         {
             var profilePlan = await Api.GetProfilePackingListAsync(selectedTripId, profile.Id, CancellationToken.None);
@@ -314,6 +320,8 @@
         checklist = checklist.Select(candidate => candidate.Id == item.Id ? candidate with { IsPacked = isPacked } : candidate).ToArray();
         await LoadTripAsync();
     }
+    private void SetUsage(Guid itemId, object? value) { if (value is bool used && used) usedItemIds.Add(itemId); else usedItemIds.Remove(itemId); }
+    private async Task SaveUsageAsync() { await Api.SaveUsageAsync(selectedTripId, usageItemIds.Select(itemId => new ClothingUsage(selectedTripId, itemId, usedItemIds.Contains(itemId))).ToArray(), CancellationToken.None); feedback = "Uso real guardado."; }
     private int LuggageCapacityPercent => luggageRules is null || luggageRules.AllowanceGrams == 0 ? 0 : Math.Min(100, (int)Math.Round(luggageRules.PlannedWeightGrams * 100m / luggageRules.AllowanceGrams));
     private sealed record PreparationProgress(string Name, int PackedClothing, int TotalClothing, int PackedChecklist, int TotalChecklist) { public int Percent { get { var total = TotalClothing + TotalChecklist; return total == 0 ? 100 : (int)Math.Round((PackedClothing + PackedChecklist) * 100m / total); } } }
     private sealed class TripInput { public string Destination { get; set; } = string.Empty; public DateOnly StartDate { get; set; } = DateOnly.FromDateTime(DateTime.Today); public DateOnly EndDate { get; set; } = DateOnly.FromDateTime(DateTime.Today.AddDays(3)); public int MinimumTemperatureCelsius { get; set; } = 18; public int MaximumTemperatureCelsius { get; set; } = 28; public string? TemplateKey { get; set; } public int LuggageAllowanceGrams { get; set; } = 10000; public bool CabinOnly { get; set; } = true; public void CopyFrom(Trip trip) { Destination = trip.Destination; StartDate = trip.StartDate; EndDate = trip.EndDate; MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius; MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius; TemplateKey = trip.TemplateKey; LuggageAllowanceGrams = trip.LuggageAllowanceGrams; CabinOnly = trip.CabinOnly; } public Trip ToTrip(Guid id) => new(id, Destination, StartDate, EndDate, MinimumTemperatureCelsius, MaximumTemperatureCelsius, [Style.Casual], TemplateKey, LuggageAllowanceGrams, CabinOnly); }

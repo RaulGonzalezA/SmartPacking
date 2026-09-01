@@ -138,6 +138,12 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
     public async Task SetChecklistPackedAsync(Guid itemId, bool isPacked, CancellationToken cancellationToken) =>
         await EnsureSuccessAsync(await httpClient.PutAsJsonAsync($"api/checklist/{itemId}", new { isPacked }, cancellationToken));
 
+    public async Task<IReadOnlyList<ClothingUsage>> GetUsageAsync(Guid tripId, CancellationToken cancellationToken) =>
+        await httpClient.GetFromJsonAsync<ClothingUsage[]>($"api/trips/{tripId}/usage", cancellationToken) ?? [];
+
+    public async Task SaveUsageAsync(Guid tripId, IReadOnlyCollection<ClothingUsage> usage, CancellationToken cancellationToken) =>
+        await EnsureSuccessAsync(await httpClient.PutAsJsonAsync($"api/trips/{tripId}/usage", usage, cancellationToken));
+
     private static Task EnsureSuccessAsync(HttpResponseMessage response)
     {
         response.EnsureSuccessStatusCode();

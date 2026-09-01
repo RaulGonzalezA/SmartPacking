@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 #pragma warning disable IDE0161 // EF Core generated migration uses block-scoped namespaces.

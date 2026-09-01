@@ -12,6 +12,8 @@ public sealed record TripTemplate(
     int DefaultLuggageAllowanceGrams,
     bool CabinOnly);
 
+public sealed record UserTripTemplate(Guid Id, Guid UserId, string Name, string Description, IReadOnlyCollection<Style> Activities, int MinimumTemperatureCelsius, int MaximumTemperatureCelsius, int LuggageAllowanceGrams, bool CabinOnly);
+
 public static class TripTemplateCatalog
 {
     public static readonly IReadOnlyList<TripTemplate> All =

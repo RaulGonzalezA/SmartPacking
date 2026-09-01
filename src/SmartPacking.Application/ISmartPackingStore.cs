@@ -36,4 +36,7 @@ public interface ISmartPackingStore
     Task SetChecklistPackedAsync(Guid userId, Guid checklistItemId, bool isPacked, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClothingUsage>> GetUsageAsync(Guid userId, Guid tripId, CancellationToken cancellationToken);
     Task SaveUsageAsync(Guid userId, Guid tripId, IReadOnlyCollection<ClothingUsage> usage, CancellationToken cancellationToken);
+    Task<IReadOnlyList<UserTripTemplate>> GetUserTripTemplatesAsync(Guid userId, CancellationToken cancellationToken);
+    Task<UserTripTemplate> AddUserTripTemplateAsync(UserTripTemplate userTemplate, CancellationToken cancellationToken);
+    Task<bool> DeleteUserTripTemplateAsync(Guid userId, Guid templateId, CancellationToken cancellationToken);
 }

@@ -105,6 +105,33 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
     [HttpGet("templates")]
     public ActionResult<IReadOnlyList<TripTemplate>> GetTemplates() => Ok(TripTemplateCatalog.All);
 
+    [HttpGet("user-templates")]
+    public async Task<ActionResult<IReadOnlyList<UserTripTemplate>>> GetUserTemplatesAsync(CancellationToken cancellationToken)
+    {
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        return Ok(await store.GetUserTripTemplatesAsync(user.Id, cancellationToken));
+    }
+
+    [HttpPost("user-templates")]
+    public async Task<ActionResult<UserTripTemplate>> CreateUserTemplateAsync(SaveUserTripTemplateRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name) || request.MaximumTemperatureCelsius < request.MinimumTemperatureCelsius || request.LuggageAllowanceGrams < 0)
+        {
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["template"] = ["Introduce una plantilla válida."] }));
+        }
+
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        var created = await store.AddUserTripTemplateAsync(new UserTripTemplate(Guid.NewGuid(), user.Id, request.Name.Trim(), request.Description?.Trim() ?? string.Empty, request.Activities, request.MinimumTemperatureCelsius, request.MaximumTemperatureCelsius, request.LuggageAllowanceGrams, request.CabinOnly), cancellationToken);
+        return Created($"/api/trips/user-templates/{created.Id}", created);
+    }
+
+    [HttpDelete("user-templates/{templateId:guid}")]
+    public async Task<IActionResult> DeleteUserTemplateAsync(Guid templateId, CancellationToken cancellationToken)
+    {
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        return await store.DeleteUserTripTemplateAsync(user.Id, templateId, cancellationToken) ? NoContent() : NotFoundProblem("Plantilla no encontrada");
+    }
+
     [HttpGet("{tripId:guid}/profiles/{profileId:guid}/luggage-rules")]
     public async Task<ActionResult<LuggageRulesSummary>> GetLuggageRulesAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken)
     {
