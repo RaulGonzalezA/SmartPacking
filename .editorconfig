@@ -17,3 +17,9 @@ csharp_style_expression_bodied_methods = when_on_single_line:silent
 
 [*.{yml,yaml,json,razor,css}]
 indent_size = 2
+
+# EF Core creates these files. They are migration snapshots, not handwritten
+# application code, so repository analyzers and style rules do not apply.
+[src/SmartPacking.Infrastructure.PostgreSql/Migrations/**.cs]
+generated_code = true
+dotnet_diagnostic.severity = none

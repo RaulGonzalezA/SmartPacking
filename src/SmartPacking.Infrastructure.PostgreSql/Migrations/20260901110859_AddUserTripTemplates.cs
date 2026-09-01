@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -34,7 +34,7 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations;
             migrationBuilder.CreateIndex(
                 name: "IX_UserTripTemplates_UserId_Name",
                 table: "UserTripTemplates",
-                columns: new[] { "UserId", "Name" },
+                columns: ["UserId", "Name"],
                 unique: true);
         }
 
