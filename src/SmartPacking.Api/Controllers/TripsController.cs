@@ -11,6 +11,8 @@ namespace SmartPacking.Api.Controllers;
 [Route("api/trips")]
 public sealed class TripsController(ISmartPackingStore store, PackingListService packingLists, ProfilePackingListService profilePackingLists, OpenMeteoWeatherProvider weather) : ControllerBase
 {
+    private const string viajeNoEncontrado = "Viaje no encontrado";
+
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<TripResponse>>> GetAsync(CancellationToken cancellationToken)
     {
@@ -55,7 +57,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
     public async Task<IActionResult> DeleteAsync(Guid tripId, CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        return await store.DeleteTripAsync(user.Id, tripId, cancellationToken) ? NoContent() : NotFoundProblem("Viaje no encontrado");
+        return await store.DeleteTripAsync(user.Id, tripId, cancellationToken) ? NoContent() : NotFoundProblem(viajeNoEncontrado);
     }
 
     [HttpPut("{tripId:guid}")]
@@ -69,7 +71,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
         var user = await store.GetDefaultUserAsync(cancellationToken);
         var trip = new Trip(tripId, request.Destination.Trim(), request.StartDate, request.EndDate, request.MinimumTemperatureCelsius, request.MaximumTemperatureCelsius, request.Activities.Count == 0 ? [Style.Casual] : request.Activities.Select(activity => (Style)activity).ToArray(), request.TemplateKey, request.LuggageAllowanceGrams ?? 10000, request.CabinOnly ?? true, (LuggageType)(request.LuggageType ?? (int)(request.CabinOnly ?? true ? LuggageType.Cabin : LuggageType.Checked)), request.LuggageHeightCentimetres ?? 55, request.LuggageWidthCentimetres ?? 40, request.LuggageDepthCentimetres ?? 20, request.DayPlans?.Select(plan => new TripDayPlan(plan.Date, plan.Activities.Select(activity => (TripActivity)activity).ToArray())).ToArray(), request.AirlineCode, request.TransportTypes?.Select(type => (TransportType)type).ToArray(), ToLuggages(request.Luggages));
         var updated = await store.UpdateTripAsync(user.Id, trip, cancellationToken);
-        return updated is null ? NotFoundProblem("Viaje no encontrado") : Ok(ToResponse(updated));
+        return updated is null ? NotFoundProblem(viajeNoEncontrado) : Ok(ToResponse(updated));
     }
 
     [HttpGet("{tripId:guid}/packing-list")]
@@ -77,7 +79,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
         var plan = await packingLists.GetOrCreateAsync(user.Id, tripId, cancellationToken);
-        return plan is null ? NotFoundProblem("Viaje no encontrado") : Ok(plan);
+        return plan is null ? NotFoundProblem(viajeNoEncontrado) : Ok(plan);
     }
 
     [HttpGet("{tripId:guid}/weather")]
@@ -87,7 +89,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
         var trip = await store.GetTripAsync(user.Id, tripId, cancellationToken);
         if (trip is null)
         {
-            return NotFoundProblem("Viaje no encontrado");
+            return NotFoundProblem(viajeNoEncontrado);
         }
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -164,7 +166,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
         var user = await store.GetDefaultUserAsync(cancellationToken);
         if (await store.GetTripAsync(user.Id, tripId, cancellationToken) is null)
         {
-            return NotFoundProblem("Viaje no encontrado");
+            return NotFoundProblem(viajeNoEncontrado);
         }
 
         var items = await store.GetChecklistAsync(user.Id, tripId, null, cancellationToken);
@@ -195,7 +197,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
         var user = await store.GetDefaultUserAsync(cancellationToken);
         if (await store.GetTripAsync(user.Id, tripId, cancellationToken) is null)
         {
-            return NotFoundProblem("Viaje no encontrado");
+            return NotFoundProblem(viajeNoEncontrado);
         }
 
         var item = new ChecklistItem(Guid.NewGuid(), tripId, request.Category, request.Name.Trim(), false);

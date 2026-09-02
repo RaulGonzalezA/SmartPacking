@@ -75,7 +75,7 @@ public partial class Home : ComponentBase, IDisposable
         State.Weather = await Api.GetWeatherAsync(State.SelectedTripId, LoadCancellationToken);
         var usage = await Api.GetUsageAsync(State.SelectedTripId, LoadCancellationToken);
         State.UsageItemIds = usage.Count == 0
-            ? State.Plan?.Plan.Items.Select(item => item.Recommendation.Item.Id).ToHashSet() ?? new HashSet<Guid>()
+            ? State.Plan?.Plan.Items.Select(item => item.Recommendation.Item.Id).ToHashSet() ?? []
             : usage.Select(item => item.ClothingItemId).ToHashSet();
         State.UsedItemIds = usage.Where(item => item.WasUsed).Select(item => item.ClothingItemId).ToHashSet();
         var profileDetails = await Task.WhenAll(State.TripProfiles.Select(async profile =>
