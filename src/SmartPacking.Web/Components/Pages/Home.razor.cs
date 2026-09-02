@@ -78,12 +78,15 @@ public partial class Home : ComponentBase, IDisposable
             ? State.Plan?.Plan.Items.Select(item => item.Recommendation.Item.Id).ToHashSet() ?? new HashSet<Guid>()
             : usage.Select(item => item.ClothingItemId).ToHashSet();
         State.UsedItemIds = usage.Where(item => item.WasUsed).Select(item => item.ClothingItemId).ToHashSet();
-        State.PreparationProgress = await Task.WhenAll(State.TripProfiles.Select(async profile =>
+        var profileDetails = await Task.WhenAll(State.TripProfiles.Select(async profile =>
         {
             var plan = await Api.GetProfilePackingListAsync(State.SelectedTripId, profile.Id, LoadCancellationToken);
             var checklist = await Api.GetChecklistAsync(State.SelectedTripId, profile.Id, LoadCancellationToken);
-            return new PreparationProgressItem(profile.Name, plan?.Plan.Items.Count(item => item.IsPacked) ?? 0, plan?.Plan.Items.Count ?? 0, checklist.Count(item => item.IsPacked), checklist.Count);
+            return (Plan: plan, Progress: new PreparationProgressItem(profile.Name, plan?.Plan.Items.Count(item => item.IsPacked) ?? 0, plan?.Plan.Items.Count ?? 0, checklist.Count(item => item.IsPacked), checklist.Count));
         }));
+        State.FamilyPlans = profileDetails.Where(item => item.Plan is not null).Select(item => item.Plan!).ToArray();
+        State.PreparationProgress = profileDetails.Select(item => item.Progress).ToArray();
+        RefreshPackingInsights();
     }
 
     private async Task LoadPlanAsync()
@@ -96,7 +99,10 @@ public partial class Home : ComponentBase, IDisposable
         State.Plan = await Api.GetProfilePackingListAsync(State.SelectedTripId, State.SelectedProfileId, LoadCancellationToken);
         State.LuggageRules = await Api.GetLuggageRulesAsync(State.SelectedTripId, State.SelectedProfileId, LoadCancellationToken);
         State.Checklist = await Api.GetChecklistAsync(State.SelectedTripId, State.SelectedProfileId, LoadCancellationToken);
+        RefreshPackingInsights();
     }
+
+    private void RefreshPackingInsights() => State.PackingInsights = PackingInsightsService.Analyze(State.Plan, State.FamilyPlans, State.Wardrobe, State.Weather);
 
     private async Task SelectTripAsync(Guid id)
     {
@@ -128,7 +134,7 @@ public partial class Home : ComponentBase, IDisposable
         finally { if (isLoadOperation) State.IsLoading = false; else State.IsSubmitting = false; }
     }
 
-    private Task CreateTripAsync(TripFormInput input) => RunAsync(async () => { await Api.CreateTripAsync(input.Destination, input.StartDate, input.EndDate, input.MinimumTemperatureCelsius, input.MaximumTemperatureCelsius, input.TemplateKey, input.LuggageAllowanceGrams, input.CabinOnly, CancellationToken.None); State.Feedback = "Viaje creado."; await LoadAsync(); });
+    private Task CreateTripAsync(TripFormInput input) => RunAsync(async () => { await Api.CreateTripAsync(input.ToTrip(Guid.NewGuid()), CancellationToken.None); State.Feedback = "Viaje creado."; await LoadAsync(); });
     private Task SaveTripAsync(Trip trip) => RunAsync(async () => { await Api.UpdateTripAsync(trip, CancellationToken.None); State.Feedback = "Viaje actualizado."; await LoadAsync(); });
     private Task DeleteTripAsync() => RunAsync(async () => { await Api.DeleteTripAsync(State.SelectedTripId, CancellationToken.None); State.SelectTrip(Guid.Empty); State.Feedback = "Viaje eliminado."; await LoadAsync(); });
     private Task AddTravellerAsync(TravellerInput input) => RunAsync(async () => { if (string.IsNullOrWhiteSpace(input.Name)) { State.Feedback = "Escribe el nombre del viajero."; return; } var profile = await Api.CreateProfileAsync(input.Name.Trim(), input.PackingNotes, input.MedicalNotes, CancellationToken.None); await Api.SetTripProfilesAsync(State.SelectedTripId, State.TripProfiles.Select(item => item.Id).Append(profile.Id).ToArray(), CancellationToken.None); State.Feedback = $"{profile.Name} se ha añadido como viajero."; await LoadAsync(); });
@@ -137,11 +143,12 @@ public partial class Home : ComponentBase, IDisposable
     private Task ArchiveTravellerAsync(Guid id) => RunAsync(async () => { await Api.ArchiveProfileAsync(id, CancellationToken.None); State.Feedback = "Viajero archivado. Sus maletas anteriores se conservan."; await LoadAsync(); });
     private Task CreateClothingAsync(string name, string color, Guid ownerId, ClothingType type, int weightGrams) => RunAsync(async () => { await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), name, type, Season.AllYear, color, 2, false, Style.Casual, weightGrams, true, true, 70, [], false, ownerId), CancellationToken.None); State.Feedback = "Prenda guardada."; await LoadAsync(); });
     private async Task UploadClothingPhotoAsync(Guid id, IBrowserFile file) { await using var content = file.OpenReadStream(5 * 1024 * 1024); var url = await Api.UploadClothingPhotoAsync(id, content, file.ContentType, file.Name, CancellationToken.None); wardrobePanel?.SetPhotoUrl(id, url); State.Feedback = "Foto de la prenda actualizada."; }
-    private async Task UpdateStatusAsync(ClothingItem item, object? clean, object? available) { await Api.UpdateClothingStatusAsync(item.Id, clean is bool c && c, available is bool a && a, CancellationToken.None); await LoadAsync(); }
+    private async Task UpdateStatusAsync(ClothingItem item, bool clean, bool available) { await Api.UpdateClothingStatusAsync(item.Id, clean, available, CancellationToken.None); await LoadAsync(); }
     private async Task DeleteClothingAsync(Guid id) { await Api.DeleteClothingAsync(id, CancellationToken.None); await LoadAsync(); }
     private async Task RestoreClothingAsync(Guid id) { await Api.RestoreClothingAsync(id, CancellationToken.None); await LoadAsync(); }
     private Task SetPackedAsync((PlannedItem Item, bool IsPacked) input) => RunAsync(async () => { if (State.Plan is not null) { await Api.SetProfilePackedAsync(State.Plan.Plan.PackingListId, input.Item.Recommendation.Item.Id, input.IsPacked, CancellationToken.None); await LoadPlanAsync(); } });
     private Task AddManualClothingAsync(Guid id) => RunAsync(async () => { if (State.Plan is null) { State.Feedback = "Selecciona una prenda para añadirla."; return; } await Api.AddProfilePackingListItemAsync(State.Plan.Plan.PackingListId, id, CancellationToken.None); await LoadPlanAsync(); });
+    private Task AddToiletryAsync(string name) => RunAsync(async () => { if (State.SelectedTripId == Guid.Empty || State.SelectedProfileId == Guid.Empty || string.IsNullOrWhiteSpace(name)) { return; } await Api.AddProfileChecklistItemAsync(State.SelectedTripId, State.SelectedProfileId, ChecklistCategory.Health, name.Trim(), CancellationToken.None); await LoadPlanAsync(); });
     private Task SetChecklistPackedAsync((ChecklistItem Item, bool IsPacked) input) => RunAsync(async () => { await Api.SetChecklistPackedAsync(input.Item.Id, input.IsPacked, CancellationToken.None); await LoadTripAsync(); });
     private Task SaveUsageAsync(IReadOnlyCollection<Guid> usedIds) => RunAsync(async () => { await Api.SaveUsageAsync(State.SelectedTripId, State.UsageItemIds.Select(id => new ClothingUsage(State.SelectedTripId, id, usedIds.Contains(id))).ToArray(), CancellationToken.None); State.Feedback = "Uso real guardado."; });
     public void Dispose() { loadCancellation?.Cancel(); loadCancellation?.Dispose(); lifetimeCancellation.Cancel(); lifetimeCancellation.Dispose(); }

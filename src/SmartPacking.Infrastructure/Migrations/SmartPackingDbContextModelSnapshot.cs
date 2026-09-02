@@ -260,8 +260,15 @@ namespace SmartPacking.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AirlineCode")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("CabinOnly")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("DayPlans")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Destination")
                         .IsRequired()
@@ -273,6 +280,22 @@ namespace SmartPacking.Infrastructure.Migrations
                     b.Property<int>("LuggageAllowanceGrams")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("LuggageDepthCentimetres")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LuggageHeightCentimetres")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LuggageType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LuggageWidthCentimetres")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Luggages")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("MaximumTemperatureCelsius")
                         .HasColumnType("INTEGER");
 
@@ -283,6 +306,10 @@ namespace SmartPacking.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TemplateKey")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TransportTypes")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("UserId")

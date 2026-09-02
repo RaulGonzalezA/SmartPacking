@@ -79,6 +79,14 @@ public sealed class TripEntity
     public string? TemplateKey { get; set; }
     public int LuggageAllowanceGrams { get; set; } = 10000;
     public bool CabinOnly { get; set; } = true;
+    public int LuggageType { get; set; }
+    public int LuggageHeightCentimetres { get; set; } = 55;
+    public int LuggageWidthCentimetres { get; set; } = 40;
+    public int LuggageDepthCentimetres { get; set; } = 20;
+    public string DayPlans { get; set; } = "[]";
+    public string? AirlineCode { get; set; }
+    public string TransportTypes { get; set; } = "[]";
+    public string Luggages { get; set; } = "[]";
 }
 public sealed class PackingListEntity { public Guid Id { get; set; } public Guid TripId { get; set; } public Guid UserId { get; set; } public DateTimeOffset CreatedAt { get; set; } }
 public sealed class PackingListItemEntity { public Guid PackingListId { get; set; } public Guid ClothingItemId { get; set; } public bool IsPacked { get; set; } }

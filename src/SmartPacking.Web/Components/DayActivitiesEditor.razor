@@ -1,0 +1,23 @@
+@using SmartPacking.Domain
+
+<article class="day-activities">
+    <header><strong>@Day.Date.ToString("ddd d MMM")</strong><span>Elige una o varias actividades</span></header>
+    <div class="activity-chips">
+        @foreach (var activity in Enum.GetValues<TripActivity>())
+        {
+            <label class="@(Day.Activities.Contains(activity) ? "selected" : string.Empty)">
+                <input type="checkbox" disabled="@IsBusy" checked="@Day.Activities.Contains(activity)" @onchange="args => Day.SetActivity(activity, args.Value is bool selected && selected)" />
+                @Name(activity)
+            </label>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public TripDayPlanInput Day { get; set; } = new(DateOnly.MinValue, TripActivity.Sightseeing);
+    [Parameter] public bool IsBusy { get; set; }
+    private static string Name(TripActivity activity) => activity switch
+    {
+        TripActivity.Sightseeing => "Turismo", TripActivity.Beach => "Playa", TripActivity.Hiking => "Senderismo", TripActivity.Business => "Negocios", TripActivity.FormalEvent => "Evento formal", TripActivity.Sport => "Deporte", TripActivity.Nightlife => "Ocio nocturno", _ => "Relax"
+    };
+}

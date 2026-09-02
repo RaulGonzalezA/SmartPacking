@@ -3,6 +3,7 @@
     <ProjectReference Include="..\SmartPacking.Application\SmartPacking.Application.csproj" />
     <ProjectReference Include="..\SmartPacking.Contracts\SmartPacking.Contracts.csproj" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />

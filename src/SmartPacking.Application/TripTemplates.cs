@@ -35,7 +35,9 @@ public sealed record LuggageRulesSummary(
     bool CabinOnly,
     bool IsWithinAllowance,
     int LiquidContainerMaximumMilliliters,
-    int CabinLiquidsBagMaximumMilliliters);
+    int CabinLiquidsBagMaximumMilliliters,
+    int PlannedVolumeMillilitres = 0,
+    int CapacityVolumeMillilitres = 0);
 
 public sealed record DailyTripForecast(DateOnly Date, decimal MinimumCelsius, decimal MaximumCelsius, int RainProbability, int WeatherCode, decimal? ApparentMinimumCelsius = null, decimal? ApparentMaximumCelsius = null, decimal? WindSpeedKilometresPerHour = null);
 public sealed record TripWeatherForecast(string Destination, decimal MinimumCelsius, decimal MaximumCelsius, int RainProbability, DateOnly StartDate, DateOnly EndDate, IReadOnlyList<DailyTripForecast> Daily);

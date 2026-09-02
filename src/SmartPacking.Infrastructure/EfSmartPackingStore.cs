@@ -234,6 +234,14 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
         entity.TemplateKey = trip.TemplateKey;
         entity.LuggageAllowanceGrams = trip.LuggageAllowanceGrams;
         entity.CabinOnly = trip.CabinOnly;
+        entity.LuggageType = (int)trip.LuggageType;
+        entity.LuggageHeightCentimetres = trip.LuggageHeightCentimetres;
+        entity.LuggageWidthCentimetres = trip.LuggageWidthCentimetres;
+        entity.LuggageDepthCentimetres = trip.LuggageDepthCentimetres;
+        entity.DayPlans = JsonSerializer.Serialize(trip.DayPlansOrEmpty);
+        entity.AirlineCode = trip.AirlineCode;
+        entity.TransportTypes = JsonSerializer.Serialize(trip.TransportTypesOrEmpty);
+        entity.Luggages = JsonSerializer.Serialize(trip.LuggagesOrDefault);
         await dbContext.SaveChangesAsync(cancellationToken);
         return ToDomain(entity);
     }
@@ -409,7 +417,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
     private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId, item.PhotoUrl);
     private static FamilyProfile ToDomain(FamilyProfileEntity profile) => new(profile.Id, profile.Name, profile.IsArchived, profile.PackingNotes, profile.MedicalNotes);
     private static UserTripTemplate ToDomain(UserTripTemplateEntity template) => new(template.Id, template.UserId, template.Name, template.Description, JsonSerializer.Deserialize<Style[]>(template.Activities) ?? [], template.MinimumTemperatureCelsius, template.MaximumTemperatureCelsius, template.LuggageAllowanceGrams, template.CabinOnly);
-    private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities), TemplateKey = trip.TemplateKey, LuggageAllowanceGrams = trip.LuggageAllowanceGrams, CabinOnly = trip.CabinOnly };
-    private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? [], trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly);
+    private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities), TemplateKey = trip.TemplateKey, LuggageAllowanceGrams = trip.LuggageAllowanceGrams, CabinOnly = trip.CabinOnly, LuggageType = (int)trip.LuggageType, LuggageHeightCentimetres = trip.LuggageHeightCentimetres, LuggageWidthCentimetres = trip.LuggageWidthCentimetres, LuggageDepthCentimetres = trip.LuggageDepthCentimetres, DayPlans = JsonSerializer.Serialize(trip.DayPlansOrEmpty), AirlineCode = trip.AirlineCode, TransportTypes = JsonSerializer.Serialize(trip.TransportTypesOrEmpty), Luggages = JsonSerializer.Serialize(trip.LuggagesOrDefault) };
+    private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? [], trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (LuggageType)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, JsonSerializer.Deserialize<TripDayPlan[]>(trip.DayPlans) ?? [], trip.AirlineCode, JsonSerializer.Deserialize<TransportType[]>(trip.TransportTypes) ?? [], JsonSerializer.Deserialize<TripLuggage[]>(trip.Luggages) ?? []);
 #pragma warning restore S4136
 }

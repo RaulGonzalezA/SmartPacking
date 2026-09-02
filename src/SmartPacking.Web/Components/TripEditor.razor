@@ -1,0 +1,28 @@
+@using SmartPacking.Application
+@using SmartPacking.Domain
+
+<EditForm Model="Input" OnValidSubmit="() => Submitted.InvokeAsync()" class="entry-form trip-editor">
+    <DataAnnotationsValidator />
+    <h2>@Title</h2>
+    <label>Plantilla <select disabled="@IsBusy" @bind="Input.TemplateKey" @bind:after="() => TemplateChanged.InvokeAsync()"><option value="">Personalizado</option>@foreach (var template in Templates) { <option value="@template.Key">@template.Name</option> }</select></label>
+    <label>Destino <InputText @bind-Value="Input.Destination" /></label><label>Salida <InputDate @bind-Value="Input.StartDate" /></label><label>Regreso <InputDate @bind-Value="Input.EndDate" /></label>
+    <section class="trip-form-section transport-editor"><div><p class="type">Cómo viajas</p><h2>Transporte</h2><p>Selecciona todos los medios que utilizarás durante el viaje.</p></div><div class="transport-chips">@foreach (var transport in Enum.GetValues<TransportType>()) { <label class="@(Input.TransportTypes.Contains(transport) ? "selected" : string.Empty)"><input type="checkbox" disabled="@IsBusy" checked="@Input.TransportTypes.Contains(transport)" @onchange="args => Input.SetTransport(transport, args.Value is bool selected && selected)" /><span aria-hidden="true">@TransportIcon(transport)</span>@TransportName(transport)</label> }</div></section>
+    <section class="trip-form-section luggage-editor"><div class="luggage-heading"><div><p class="type">Equipaje</p><h2>Maletas</h2><p>La aerolínea solo limita las maletas de cabina. Puedes añadir todas las demás que necesites.</p></div><button type="button" disabled="@IsBusy" @onclick="Input.AddLuggage">Añadir maleta</button></div>@if (Input.TransportTypes.Contains(TransportType.Plane)) { <label class="airline-select">Aerolínea <select disabled="@IsBusy" @bind="Input.AirlineCode" @bind:after="Input.ApplyAirlineRule"><option value="">Sin aerolínea</option>@foreach (var rule in AirlineLuggageCatalog.All) { <option value="@rule.Code">@rule.Name</option> }</select></label> }@foreach (var luggage in Input.Luggages) { var lockedByAirline = luggage.Type == LuggageType.Cabin && !string.IsNullOrWhiteSpace(Input.AirlineCode); <article class="luggage-card"><div class="luggage-card-title"><span aria-hidden="true">@LuggageIcon(luggage.Type)</span><label>Nombre <InputText @bind-Value="luggage.Name" placeholder="Ej. maleta grande" /></label><button type="button" class="secondary" disabled="@(IsBusy || Input.Luggages.Count == 1)" @onclick="() => Input.RemoveLuggage(luggage)">Quitar</button></div><div class="luggage-fields"><label>Tipo <select disabled="@IsBusy" @bind="luggage.Type" @bind:after="() => Input.ApplyLuggageType(luggage)">@foreach (var type in Enum.GetValues<LuggageType>()) { <option value="@type">@TypeName(type)</option> }</select></label><label>Peso (g) <InputNumber disabled="@(IsBusy || lockedByAirline)" @bind-Value="luggage.AllowanceGrams" /></label><label>Alto (cm) <InputNumber disabled="@(IsBusy || lockedByAirline)" @bind-Value="luggage.HeightCentimetres" /></label><label>Ancho (cm) <InputNumber disabled="@(IsBusy || lockedByAirline)" @bind-Value="luggage.WidthCentimetres" /></label><label>Fondo (cm) <InputNumber disabled="@(IsBusy || lockedByAirline)" @bind-Value="luggage.DepthCentimetres" /></label></div>@if (lockedByAirline) { <small class="luggage-lock">🔒 Medidas aplicadas por la aerolínea seleccionada.</small> }</article> }</section>
+    <section class="itinerary-editor trip-activities"><div><p class="type">Plan diario</p><h2>Actividades por día</h2><p>Combina hasta tres actividades para reflejar el día real.</p></div><button type="button" disabled="@IsBusy" @onclick="Input.EnsureDayPlans">Generar itinerario diario</button><div class="day-activities-grid">@foreach (var day in Input.DayPlans) { <DayActivitiesEditor Day="day" IsBusy="IsBusy" /> }</div></section>
+    <button disabled="@IsBusy">@SubmitLabel</button>@if (Cancelled.HasDelegate) { <button type="button" disabled="@IsBusy" @onclick="() => Cancelled.InvokeAsync()">Cancelar</button> }
+</EditForm>
+
+@code {
+    [Parameter, EditorRequired] public TripFormInput Input { get; set; } = new();
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string SubmitLabel { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public EventCallback Submitted { get; set; }
+    [Parameter] public EventCallback TemplateChanged { get; set; }
+    [Parameter] public EventCallback Cancelled { get; set; }
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public IReadOnlyList<TripTemplate> Templates { get; set; } = [];
+    private static string TypeName(LuggageType type) => type switch { LuggageType.Backpack => "Mochila", LuggageType.Cabin => "Cabina", _ => "Facturada" };
+    private static string LuggageIcon(LuggageType type) => type switch { LuggageType.Backpack => "🎒", LuggageType.Cabin => "🧳", _ => "🧳" };
+    private static string TransportName(TransportType type) => type switch { TransportType.Car => "Coche", TransportType.Plane => "Avión", TransportType.Train => "Tren", TransportType.Bus => "Autobús", _ => "Crucero" };
+    private static string TransportIcon(TransportType type) => type switch { TransportType.Car => "🚗", TransportType.Plane => "✈️", TransportType.Train => "🚆", TransportType.Bus => "🚌", _ => "🛳️" };
+}

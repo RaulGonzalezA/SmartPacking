@@ -10,6 +10,60 @@ namespace SmartPacking.Web.Tests;
 public sealed class PanelRenderingTests : BunitContext
 {
     [Fact]
+    public async Task TripsPanelSavesAnEditedTraveller()
+    {
+        var profile = new FamilyProfile(Guid.NewGuid(), "Ana", false, "Gafas", "Ninguna");
+        FamilyProfile? saved = null;
+        var cut = Render<TripsPanel>(parameters => parameters
+            .Add(component => component.IsActive, true)
+            .Add(component => component.Profiles, new[] { profile })
+            .Add(component => component.TravellerUpdated, EventCallback.Factory.Create<FamilyProfile>(this, value => saved = value)));
+
+        await cut.FindAll("button").Single(button => button.TextContent == "Editar").ClickAsync();
+        await cut.FindAll("button").Single(button => button.TextContent == "Guardar viajero").ClickAsync();
+
+        saved.Should().Be(profile);
+    }
+
+    [Fact]
+    public void TripFormInputBuildsOneActivityForEachTripDayAndAppliesLuggageDefaults()
+    {
+        var input = new TripFormInput
+        {
+            StartDate = new DateOnly(2026, 9, 10),
+            EndDate = new DateOnly(2026, 9, 12),
+            LuggageType = LuggageType.Checked
+        };
+
+        input.ApplyLuggageDefaults();
+        input.EnsureDayPlans();
+        input.DayPlans[0].SetActivity(TripActivity.Beach, true);
+        input.DayPlans[0].SetActivity(TripActivity.Hiking, true);
+        input.DayPlans[0].SetActivity(TripActivity.Business, true);
+
+        input.DayPlans.Should().HaveCount(3);
+        input.DayPlans.Skip(1).Should().OnlyContain(day => day.Activities.Count == 1 && day.Activities.Contains(TripActivity.Sightseeing));
+        input.LuggageAllowanceGrams.Should().Be(23000);
+        input.ToTrip(Guid.NewGuid()).DayPlansOrEmpty.Should().Contain(plan => plan.Activities.Count == 3 && !plan.Activities.Contains(TripActivity.Business));
+    }
+
+    [Fact]
+    public void TripFormInputAllowsMultipleLuggagesAndOnlyAppliesAirlineLimitsToCabinLuggage()
+    {
+        var input = new TripFormInput { AirlineCode = "iberia" };
+        input.SetTransport(TransportType.Plane, true);
+        input.AddLuggage();
+        var checkedLuggage = input.Luggages.Single(luggage => luggage.Type == LuggageType.Checked);
+        checkedLuggage.AllowanceGrams = 18000;
+
+        input.ApplyAirlineRule();
+
+        input.ToTrip(Guid.NewGuid()).TransportTypesOrEmpty.Should().Contain(TransportType.Plane);
+        input.ToTrip(Guid.NewGuid()).LuggagesOrDefault.Should().ContainSingle(luggage => luggage.Type == LuggageType.Cabin && luggage.AllowanceGrams == 10000);
+        input.ToTrip(Guid.NewGuid()).LuggagesOrDefault.Should().ContainSingle(luggage => luggage.Type == LuggageType.Checked && luggage.AllowanceGrams == 18000);
+    }
+
+    [Fact]
     public void TripsPanelWithoutTripsExplainsHowToStartAndDisablesTripActions()
     {
         var cut = Render<TripsPanel>(parameters => parameters

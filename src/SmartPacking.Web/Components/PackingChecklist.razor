@@ -5,7 +5,7 @@
     <section class="family-section">
         <h2>Imprescindibles del viaje</h2>
         <p class="muted">Objetos que no pertenecen al armario: documentos, higiene, tecnología y salud.</p>
-        @foreach (var category in Items.GroupBy(item => item.Category))
+        @foreach (var category in Items.Where(item => item.Category is not ChecklistCategory.Toiletries and not ChecklistCategory.Health).GroupBy(item => item.Category))
         {
             <h3>@CategoryName(category.Key)</h3>
             <div class="profile-items">

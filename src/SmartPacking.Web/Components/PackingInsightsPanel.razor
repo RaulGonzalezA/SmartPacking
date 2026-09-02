@@ -1,0 +1,44 @@
+@using SmartPacking.Application
+
+@if (Insights is not null)
+{
+    <section class="family-section packing-insights">
+        <h2>Optimización de la maleta</h2>
+        @if (Insights.WeightSuggestions.Count > 0)
+        {
+            <h3>Para reducir peso</h3>
+            <ul>
+                @foreach (var suggestion in Insights.WeightSuggestions)
+                {
+                    <li>@suggestion.Action @suggestion.Item.Name@(suggestion.Replacement is null ? string.Empty : $" por {suggestion.Replacement.Name}") · ahorras @suggestion.SavedGrams g.</li>
+                }
+            </ul>
+        }
+        @if (Insights.WeatherChanges.Count > 0)
+        {
+            <h3>Cambios por la previsión real</h3>
+            <ul>@foreach (var change in Insights.WeatherChanges) { <li>@change.Description</li> }</ul>
+        }
+        @if (Insights.SharedItems.Count > 0 || Insights.Duplicates.Count > 0)
+        {
+            <h3>Coordinación familiar</h3>
+            <ul>
+                @foreach (var item in Insights.SharedItems) { <li>@item.Description Evita hasta @item.PotentialSavedGrams g duplicados.</li> }
+                @foreach (var item in Insights.Duplicates) { <li>@item.Description Posible ahorro: @item.PotentialSavedGrams g.</li> }
+            </ul>
+        }
+        @if (Insights.LaundryReuse.Count > 0)
+        {
+            <h3>Lavandería y reutilización</h3>
+            <ul>@foreach (var item in Insights.LaundryReuse) { <li>@item.Description Ahorro estimado: @item.EstimatedSavedGrams g.</li> }</ul>
+        }
+        @if (Insights.WeightSuggestions.Count == 0 && Insights.WeatherChanges.Count == 0 && Insights.SharedItems.Count == 0 && Insights.Duplicates.Count == 0 && Insights.LaundryReuse.Count == 0)
+        {
+            <p class="muted">La maleta está equilibrada por ahora. Al añadir viajeros, prendas o una previsión real aparecerán aquí las oportunidades de optimización.</p>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public PackingInsights? Insights { get; set; }
+}
