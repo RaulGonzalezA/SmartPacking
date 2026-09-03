@@ -41,3 +41,21 @@ $env:Authentication__JwtBearer__Audience = "https://smartpacking-api"
 Ejecuta API y web desde esa misma sesión. En producción, configura los mismos valores como secretos del entorno de despliegue.
 
 El `Audience` debe coincidir exactamente con el Identifier de la API. Cada token contiene el `sub` de Auth0; SmartPacking lo combina con el `issuer` para generar y persistir el usuario interno correspondiente en el primer acceso.
+
+## 4. Exigir correo verificado
+
+La API rechaza tokens cuyo correo no esté verificado. Como los access tokens destinados a una API no incluyen necesariamente ese dato, crea una **Action** de tipo *Login / Post Login* en Auth0 y añádela al flujo de inicio de sesión:
+
+```javascript
+exports.onExecutePostLogin = async (event, api) => {
+  api.accessToken.setCustomClaim(
+    "https://smartpacking.app/email_verified",
+    event.user.email_verified === true);
+};
+```
+
+Comprueba el correo desde Universal Login antes de entrar en la aplicación. No se debe registrar el valor del token ni el correo en los logs de SmartPacking.
+
+## 5. Recuperación y eliminación de cuenta
+
+La recuperación de contraseña, los proveedores sociales y la eliminación de la identidad de acceso se gestionan en Auth0. SmartPacking permite actualizar el nombre y borrar **todos los datos locales** desde `Mi cuenta`; al borrar los datos, se conserva la cuenta de Auth0 para que el proveedor pueda aplicar su política de recuperación y retención.

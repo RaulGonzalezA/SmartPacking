@@ -12,16 +12,18 @@ public sealed class PackingListsController(ISmartPackingStore store) : Controlle
     public async Task<IActionResult> SetPackedAsync(Guid packingListId, Guid clothingItemId, SetPackedRequest request, CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        await store.SetPackedAsync(user.Id, packingListId, clothingItemId, request.IsPacked, cancellationToken);
-        return NoContent();
+        return await store.SetPackedAsync(user.Id, packingListId, clothingItemId, request.IsPacked, cancellationToken)
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "Prenda o maleta no encontrada");
     }
 
     [HttpPut("profile-packing-lists/{packingListId:guid}/items/{clothingItemId:guid}")]
     public async Task<IActionResult> SetProfilePackedAsync(Guid packingListId, Guid clothingItemId, SetPackedRequest request, CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        await store.SetProfilePackedAsync(user.Id, packingListId, clothingItemId, request.IsPacked, cancellationToken);
-        return NoContent();
+        return await store.SetProfilePackedAsync(user.Id, packingListId, clothingItemId, request.IsPacked, cancellationToken)
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "Prenda o maleta no encontrada");
     }
 
     [HttpPost("profile-packing-lists/{packingListId:guid}/items")]
@@ -37,7 +39,8 @@ public sealed class PackingListsController(ISmartPackingStore store) : Controlle
     public async Task<IActionResult> SetChecklistPackedAsync(Guid itemId, SetPackedRequest request, CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        await store.SetChecklistPackedAsync(user.Id, itemId, request.IsPacked, cancellationToken);
-        return NoContent();
+        return await store.SetChecklistPackedAsync(user.Id, itemId, request.IsPacked, cancellationToken)
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "Checklist no encontrada");
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using SmartPacking.Application;
@@ -34,6 +35,7 @@ if (authenticationEnabled)
         options.Scope.Add("openid");
         options.Scope.Add("profile");
         options.Scope.Add("email");
+        options.ClaimActions.MapUniqueJsonKey("email_verified", "email_verified");
         options.Events.OnRedirectToIdentityProvider = context =>
         {
             context.ProtocolMessage.SetParameter("audience", audience);
@@ -44,6 +46,17 @@ if (authenticationEnabled)
             }
 
             return Task.CompletedTask;
+        };
+        options.Events.OnTicketReceived = async context =>
+        {
+            var emailVerified = context.Principal?.FindFirst("email_verified")?.Value
+                ?? context.Principal?.FindFirst("https://smartpacking.app/email_verified")?.Value;
+            if (!bool.TryParse(emailVerified, out var isEmailVerified) || !isEmailVerified)
+            {
+                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                context.Response.Redirect("/login?error=email_not_verified");
+                context.HandleResponse();
+            }
         };
     });
     builder.Services.AddAuthorization();
@@ -65,7 +78,11 @@ if (authenticationEnabled)
 {
     app.UseAuthentication();
     app.UseAuthorization();
-    app.MapGet("/login", () => Results.Redirect("/login.html"));
+    app.MapGet("/login", async (HttpContext context, string? error) =>
+    {
+        await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        return Results.Redirect($"/login.html{(string.IsNullOrWhiteSpace(error) ? string.Empty : $"?error={Uri.EscapeDataString(error)}")}");
+    });
     app.MapGet("/auth/login", () => Results.Challenge(new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/" }, [OpenIdConnectDefaults.AuthenticationScheme]));
     app.MapGet("/auth/register", () =>
     {

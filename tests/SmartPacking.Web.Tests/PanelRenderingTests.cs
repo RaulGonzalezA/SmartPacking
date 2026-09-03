@@ -23,6 +23,21 @@ public sealed class PanelRenderingTests : BunitContext
     }
 
     [Fact]
+    public async Task AccountPanelRequiresAnExplicitConfirmationBeforeDeletingData()
+    {
+        var deleted = false;
+        var cut = Render<AccountPanel>(parameters => parameters
+            .Add(component => component.User, new UserProfile(Guid.NewGuid(), "Lucía", true))
+            .Add(component => component.AccountDeleted, EventCallback.Factory.Create(this, () => deleted = true)));
+
+        cut.FindAll("button").Single(button => button.TextContent == "Eliminar mis datos").HasAttribute("disabled").Should().BeTrue();
+        await cut.FindAll("input")[1].ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "ELIMINAR" });
+        await cut.FindAll("button").Single(button => button.TextContent == "Eliminar mis datos").ClickAsync();
+
+        deleted.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task TripsPanelSavesAnEditedTraveller()
     {
         var profile = new FamilyProfile(Guid.NewGuid(), "Ana", false, "Gafas", "Ninguna");

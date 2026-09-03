@@ -29,6 +29,20 @@ public static class AuthenticationServiceCollectionExtensions
             {
                 options.Authority = authority;
                 options.Audience = audience;
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = context =>
+                    {
+                        var emailVerified = context.Principal?.FindFirst("https://smartpacking.app/email_verified")?.Value
+                            ?? context.Principal?.FindFirst("email_verified")?.Value;
+                        if (!bool.TryParse(emailVerified, out var isEmailVerified) || !isEmailVerified)
+                        {
+                            context.Fail("El correo electrónico debe estar verificado para usar SmartPacking.");
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                };
             });
         services.AddAuthorization();
         return true;

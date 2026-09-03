@@ -21,6 +21,8 @@ public class HttpContextExternalIdentityAccessor : IExternalIdentityAccessor
         var subject = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user.FindFirst("sub")?.Value ?? string.Empty;
         var displayName = user.Identity?.Name ?? user.FindFirst("name")?.Value ?? string.Empty;
 
-        return new ExternalIdentity(issuer, subject, displayName);
+        var emailVerifiedValue = user.FindFirstValue("https://smartpacking.app/email_verified")
+            ?? user.FindFirstValue("email_verified");
+        return new ExternalIdentity(issuer, subject, displayName, bool.TryParse(emailVerifiedValue, out var isEmailVerified) && isEmailVerified);
     }
 }

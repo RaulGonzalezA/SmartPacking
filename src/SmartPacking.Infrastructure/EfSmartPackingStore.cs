@@ -116,8 +116,56 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
             mainProfile.IsArchived = false;
         }
 
+        AddAuditEvent(userId, "user.onboarded");
         await dbContext.SaveChangesAsync(cancellationToken);
         return ToDomain(user);
+    }
+
+    public async Task<UserProfile?> UpdateUserProfileAsync(Guid userId, string name, CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users.SingleOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        user.Name = name;
+        var mainProfile = await dbContext.FamilyProfiles.SingleOrDefaultAsync(profile => profile.Id == userId && profile.UserId == userId, cancellationToken);
+        if (mainProfile is not null)
+        {
+            mainProfile.Name = name;
+        }
+
+        AddAuditEvent(userId, "user.profile_updated");
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDomain(user);
+    }
+
+    public async Task<bool> DeleteUserDataAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users.SingleOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken);
+        if (user is null)
+        {
+            return false;
+        }
+
+        var packingListIds = await dbContext.PackingLists.Where(item => item.UserId == userId).Select(item => item.Id).ToListAsync(cancellationToken);
+        var profilePackingListIds = await dbContext.ProfilePackingLists.Where(item => item.UserId == userId).Select(item => item.Id).ToListAsync(cancellationToken);
+        dbContext.PackingListItems.RemoveRange(dbContext.PackingListItems.Where(item => packingListIds.Contains(item.PackingListId)));
+        dbContext.ProfilePackingListItems.RemoveRange(dbContext.ProfilePackingListItems.Where(item => profilePackingListIds.Contains(item.PackingListId)));
+        dbContext.PackingLists.RemoveRange(dbContext.PackingLists.Where(item => item.UserId == userId));
+        dbContext.ProfilePackingLists.RemoveRange(dbContext.ProfilePackingLists.Where(item => item.UserId == userId));
+        dbContext.ChecklistItems.RemoveRange(dbContext.ChecklistItems.Where(item => item.UserId == userId));
+        dbContext.ClothingUsage.RemoveRange(dbContext.ClothingUsage.Where(item => item.UserId == userId));
+        dbContext.TripProfiles.RemoveRange(dbContext.TripProfiles.Where(item => item.UserId == userId));
+        dbContext.Trips.RemoveRange(dbContext.Trips.Where(item => item.UserId == userId));
+        dbContext.ClothingItems.RemoveRange(dbContext.ClothingItems.Where(item => item.UserId == userId));
+        dbContext.FamilyProfiles.RemoveRange(dbContext.FamilyProfiles.Where(item => item.UserId == userId));
+        dbContext.UserTripTemplates.RemoveRange(dbContext.UserTripTemplates.Where(item => item.UserId == userId));
+        dbContext.UserAuditEvents.RemoveRange(dbContext.UserAuditEvents.Where(item => item.UserId == userId));
+        dbContext.Users.Remove(user);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     private static Guid CreateUserId(string issuer, string subject)
@@ -166,6 +214,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         }
 
         entity.IsArchived = true;
+        AddAuditEvent(userId, "family_profile.archived");
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -216,6 +265,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         }
 
         item.IsDeleted = true;
+        AddAuditEvent(userId, "clothing.deleted");
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -332,6 +382,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         dbContext.ClothingUsage.RemoveRange(dbContext.ClothingUsage.Where(item => item.UserId == userId && item.TripId == tripId));
         dbContext.TripProfiles.RemoveRange(dbContext.TripProfiles.Where(item => item.UserId == userId && item.TripId == tripId));
         dbContext.Trips.Remove(trip);
+        AddAuditEvent(userId, "trip.deleted");
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -362,22 +413,23 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         return packingList;
     }
 
-    public async Task SetPackedAsync(Guid userId, Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken)
+    public async Task<bool> SetPackedAsync(Guid userId, Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken)
     {
         var belongsToUser = await dbContext.PackingLists.AnyAsync(list => list.Id == packingListId && list.UserId == userId, cancellationToken);
         if (!belongsToUser)
         {
-            return;
+            return false;
         }
 
         var item = await dbContext.PackingListItems.SingleOrDefaultAsync(entry => entry.PackingListId == packingListId && entry.ClothingItemId == clothingItemId, cancellationToken);
         if (item is null)
         {
-            return;
+            return false;
         }
 
         item.IsPacked = isPacked;
         await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<ProfilePackingList?> GetProfilePackingListAsync(Guid userId, Guid tripId, Guid profileId, CancellationToken cancellationToken)
@@ -400,22 +452,23 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         return packingList;
     }
 
-    public async Task SetProfilePackedAsync(Guid userId, Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken)
+    public async Task<bool> SetProfilePackedAsync(Guid userId, Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken)
     {
         var belongsToUser = await dbContext.ProfilePackingLists.AnyAsync(list => list.Id == packingListId && list.UserId == userId, cancellationToken);
         if (!belongsToUser)
         {
-            return;
+            return false;
         }
 
         var item = await dbContext.ProfilePackingListItems.SingleOrDefaultAsync(entry => entry.PackingListId == packingListId && entry.ClothingItemId == clothingItemId, cancellationToken);
         if (item is null)
         {
-            return;
+            return false;
         }
 
         item.IsPacked = isPacked;
         await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<bool> AddProfilePackingListItemAsync(Guid userId, Guid packingListId, Guid clothingItemId, CancellationToken cancellationToken)
@@ -445,21 +498,30 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         await dbContext.SaveChangesAsync(cancellationToken);
         return items.ToArray();
     }
-    public async Task SetChecklistPackedAsync(Guid userId, Guid checklistItemId, bool isPacked, CancellationToken cancellationToken)
+    public async Task<bool> SetChecklistPackedAsync(Guid userId, Guid checklistItemId, bool isPacked, CancellationToken cancellationToken)
     {
         var item = await dbContext.ChecklistItems.SingleOrDefaultAsync(item => item.UserId == userId && item.Id == checklistItemId, cancellationToken);
         if (item is null)
         {
-            return;
+            return false;
         }
 
         item.IsPacked = isPacked;
         await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
     public async Task SaveUsageAsync(Guid userId, Guid tripId, IReadOnlyCollection<ClothingUsage> usage, CancellationToken cancellationToken)
     { var old = dbContext.ClothingUsage.Where(item => item.UserId == userId && item.TripId == tripId); dbContext.ClothingUsage.RemoveRange(old); dbContext.ClothingUsage.AddRange(usage.Select(item => new ClothingUsageEntity { UserId = userId, TripId = tripId, ClothingItemId = item.ClothingItemId, WasUsed = item.WasUsed })); await dbContext.SaveChangesAsync(cancellationToken); }
     public async Task<IReadOnlyList<ClothingUsage>> GetUsageAsync(Guid userId, Guid tripId, CancellationToken cancellationToken) =>
         (await dbContext.ClothingUsage.Where(item => item.UserId == userId && item.TripId == tripId).ToListAsync(cancellationToken)).Select(item => new ClothingUsage(item.TripId, item.ClothingItemId, item.WasUsed)).ToArray();
+
+    private void AddAuditEvent(Guid userId, string action) => dbContext.UserAuditEvents.Add(new UserAuditEventEntity
+    {
+        Id = Guid.NewGuid(),
+        UserId = userId,
+        OccurredAt = DateTimeOffset.UtcNow,
+        Action = action
+    });
 
 #pragma warning disable S4136 // Entity/domain conversions remain grouped by their related type.
     private static ClothingItemEntity ToEntity(Guid userId, ClothingItem item) => new()

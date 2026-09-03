@@ -7,6 +7,8 @@ public interface IWebSmartPackingClient
 {
     Task<UserProfile> GetCurrentUserAsync(CancellationToken cancellationToken);
     Task<UserProfile> CompleteOnboardingAsync(string name, CancellationToken cancellationToken);
+    Task<UserProfile> UpdateCurrentUserAsync(string name, CancellationToken cancellationToken);
+    Task DeleteCurrentUserAsync(string confirmation, CancellationToken cancellationToken);
     Task<IReadOnlyList<Trip>> GetTripsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<FamilyProfile>> GetProfilesAsync(CancellationToken cancellationToken);
     Task<FamilyProfile> CreateProfileAsync(string name, string? packingNotes, string? medicalNotes, CancellationToken cancellationToken);

@@ -4,6 +4,7 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -43,7 +44,7 @@ public sealed class WardrobeApiTests : IAsyncLifetime
                 services.RemoveAll<IExternalIdentityAccessor>();
                 services.AddDbContext<SmartPackingDbContext>(options => options.UseSqlite(databaseConnection));
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
-                services.AddScoped<IExternalIdentityAccessor>(_ => new TestExternalIdentityAccessor());
+                services.AddScoped<IExternalIdentityAccessor, TestExternalIdentityAccessor>();
             });
         });
         client = factory.CreateClient();
@@ -124,6 +125,54 @@ public sealed class WardrobeApiTests : IAsyncLifetime
         checklist.Should().OnlyContain(item => item.ProfileId == profileId);
     }
 
+    [Fact]
+    public async Task UserCannotModifyAnotherUsersWardrobeOrPackingList()
+    {
+        client.DefaultRequestHeaders.Add("X-Test-User", "user-a");
+        (await client.PostAsJsonAsync("/api/me/onboarding", new { name = "Usuario A" })).EnsureSuccessStatusCode();
+        var clothing = new UpsertClothingItemRequest("Chaqueta privada", ClothingType.Jacket, Season.AllYear, "Negro", 5, true, Style.Casual, 450, true, true, 70, [], null);
+        var createClothing = await client.PostAsJsonAsync("/api/wardrobe", clothing);
+        createClothing.StatusCode.Should().Be(HttpStatusCode.Created);
+        var clothingId = (await createClothing.Content.ReadFromJsonAsync<ApiResult<ClothingItemResponse>>())!.Data.Id;
+
+        var tripResponse = await client.PostAsJsonAsync("/api/trips", new
+        {
+            destination = "Bilbao",
+            startDate = new DateOnly(2026, 10, 10),
+            endDate = new DateOnly(2026, 10, 12),
+            minimumTemperatureCelsius = 10,
+            maximumTemperatureCelsius = 18,
+            activities = new[] { Style.Casual }
+        });
+        var tripId = (await tripResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var profile = (await client.GetFromJsonAsync<FamilyProfile[]>($"/api/trips/{tripId}/profiles"))!.Single();
+        var plan = await client.GetFromJsonAsync<ProfileTripPackingPlan>($"/api/trips/{tripId}/profiles/{profile.Id}/packing-list");
+        plan.Should().NotBeNull();
+
+        client.DefaultRequestHeaders.Remove("X-Test-User");
+        client.DefaultRequestHeaders.Add("X-Test-User", "user-b");
+        (await client.DeleteAsync($"/api/wardrobe/{clothingId}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await client.PutAsJsonAsync($"/api/profile-packing-lists/{plan!.Plan.PackingListId}/items/{clothingId}", new { isPacked = true })).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task UserCanUpdateAndPermanentlyDeleteTheirLocalData()
+    {
+        var currentUser = await client.GetFromJsonAsync<UserProfile>("/api/me");
+        var update = await client.PutAsJsonAsync("/api/me", new { name = "María" });
+        update.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await update.Content.ReadFromJsonAsync<UserProfile>())!.Name.Should().Be("María");
+
+        (await client.PostAsJsonAsync("/api/wardrobe", new UpsertClothingItemRequest("Abrigo", ClothingType.Jacket, Season.Winter, "Gris", 7, true, Style.Casual, 600, true, true, 70, [], null))).EnsureSuccessStatusCode();
+        (await client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, "/api/me") { Content = JsonContent.Create(new { confirmation = "ELIMINAR" }) })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var recreatedUser = await client.GetFromJsonAsync<UserProfile>("/api/me");
+        recreatedUser.Should().NotBeNull();
+        recreatedUser!.Id.Should().NotBe(currentUser!.Id);
+        recreatedUser.IsOnboarded.Should().BeFalse();
+        (await client.GetFromJsonAsync<ApiResult<ClothingItemResponse[]>>("/api/wardrobe"))!.Data.Should().BeEmpty();
+    }
+
     public async Task DisposeAsync()
     {
         client.Dispose();
@@ -131,8 +180,12 @@ public sealed class WardrobeApiTests : IAsyncLifetime
         await databaseConnection.DisposeAsync();
     }
 
-    private sealed class TestExternalIdentityAccessor : IExternalIdentityAccessor
+    private sealed class TestExternalIdentityAccessor(IHttpContextAccessor httpContextAccessor) : IExternalIdentityAccessor
     {
-        public ExternalIdentity? GetCurrent() => new("https://issuer.example", "auth0|integration-user", "Perfil externo");
+        public ExternalIdentity? GetCurrent()
+        {
+            var subject = httpContextAccessor.HttpContext?.Request.Headers["X-Test-User"].FirstOrDefault() ?? "auth0|integration-user";
+            return new ExternalIdentity("https://issuer.example", subject, "Perfil externo", true);
+        }
     }
 }

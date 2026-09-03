@@ -340,6 +340,29 @@ namespace SmartPacking.Infrastructure.Migrations
                     b.ToTable("TripProfiles");
                 });
 
+            modelBuilder.Entity("SmartPacking.Infrastructure.UserAuditEventEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "OccurredAt");
+
+                    b.ToTable("UserAuditEvents");
+                });
+
             modelBuilder.Entity("SmartPacking.Infrastructure.UserEntity", b =>
                 {
                     b.Property<Guid>("Id")

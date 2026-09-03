@@ -5,6 +5,7 @@ namespace SmartPacking.Infrastructure;
 public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext> options) : DbContext(options)
 {
     public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<UserAuditEventEntity> UserAuditEvents => Set<UserAuditEventEntity>();
     public DbSet<ClothingItemEntity> ClothingItems => Set<ClothingItemEntity>();
     public DbSet<TripEntity> Trips => Set<TripEntity>();
     public DbSet<PackingListEntity> PackingLists => Set<PackingListEntity>();
@@ -21,6 +22,8 @@ public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext
     {
         modelBuilder.Entity<UserEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<UserEntity>().HasIndex(entity => new { entity.ExternalIssuer, entity.ExternalSubject }).IsUnique();
+        modelBuilder.Entity<UserAuditEventEntity>().HasKey(entity => entity.Id);
+        modelBuilder.Entity<UserAuditEventEntity>().HasIndex(entity => new { entity.UserId, entity.OccurredAt });
         modelBuilder.Entity<ClothingItemEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.Name }).IsUnique();
         modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.IsDeleted });
@@ -53,6 +56,13 @@ public sealed class UserEntity
     public string? ExternalIssuer { get; set; }
     public string? ExternalSubject { get; set; }
     public bool IsOnboarded { get; set; }
+}
+public sealed class UserAuditEventEntity
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public DateTimeOffset OccurredAt { get; set; }
+    public string Action { get; set; } = string.Empty;
 }
 public sealed class ClothingItemEntity
 {

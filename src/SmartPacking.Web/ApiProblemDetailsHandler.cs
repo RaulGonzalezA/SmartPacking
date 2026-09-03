@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 
 namespace SmartPacking.Web;
@@ -13,7 +14,16 @@ public sealed class ApiProblemDetailsHandler : DelegatingHandler
             return response;
         }
 
-        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>(cancellationToken: cancellationToken);
+        ProblemDetails? problem = null;
+        try
+        {
+            problem = await response.Content.ReadFromJsonAsync<ProblemDetails>(cancellationToken: cancellationToken);
+        }
+        catch (JsonException)
+        {
+            // Authentication middleware can return an empty 401 response instead of ProblemDetails.
+        }
+
         var exception = new ApiProblemException((int)response.StatusCode, problem?.Title ?? "No se pudo completar la operación.", problem?.Detail);
         response.Dispose();
         throw exception;

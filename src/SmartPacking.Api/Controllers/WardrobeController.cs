@@ -53,6 +53,11 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
+        if (!await IsValidOwnerProfileAsync(user.Id, request.OwnerProfileId, cancellationToken))
+        {
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["ownerProfileId"] = ["El perfil asignado no pertenece al usuario actual."] }));
+        }
+
         var created = await store.AddClothingItemAsync(user.Id, request.ToDomain(Guid.NewGuid()), cancellationToken);
         return Created($"/api/wardrobe/{created.Id}", new ApiResult<ClothingItemResponse>(created.ToResponse()));
     }
@@ -70,6 +75,11 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
+        if (!await IsValidOwnerProfileAsync(user.Id, request.OwnerProfileId, cancellationToken))
+        {
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["ownerProfileId"] = ["El perfil asignado no pertenece al usuario actual."] }));
+        }
+
         var existing = (await store.GetWardrobeAsync(user.Id, cancellationToken)).SingleOrDefault(item => item.Id == clothingItemId);
         if (existing is null)
         {
@@ -114,4 +124,7 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
         statusCode: StatusCodes.Status404NotFound,
         title: "Prenda no encontrada",
         detail: $"No existe una prenda con el identificador '{clothingItemId}'.");
+
+    private async Task<bool> IsValidOwnerProfileAsync(Guid userId, Guid? profileId, CancellationToken cancellationToken) =>
+        profileId is null || (await store.GetFamilyProfilesAsync(userId, cancellationToken)).Any(profile => profile.Id == profileId && !profile.IsArchived);
 }

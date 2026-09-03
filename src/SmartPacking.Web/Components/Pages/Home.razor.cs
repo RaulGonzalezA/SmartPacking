@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components.Routing;
 using SmartPacking.Application;
 using SmartPacking.Domain;
 
@@ -17,6 +18,9 @@ public partial class Home : ComponentBase, IDisposable
     private CancellationTokenSource? loadCancellation;
     private WardrobePanel? wardrobePanel;
     private UserProfile? currentUser;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
 
     protected HomeViewModel State { get; } = new();
 
@@ -138,6 +142,10 @@ public partial class Home : ComponentBase, IDisposable
         await InvokeAsync(StateHasChanged);
         try { await operation(); }
         catch (OperationCanceledException) { /* Superseded load. */ }
+        catch (ApiProblemException exception) when (exception.StatusCode is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden)
+        {
+            Navigation.NavigateTo("/login?error=email_not_verified", forceLoad: true);
+        }
         catch (ApiProblemException exception) { State.Feedback = exception.Message; }
         catch (HttpRequestException) { State.Feedback = "No se ha podido conectar con el servicio. Inténtalo de nuevo."; }
         catch (Exception) { State.Feedback = "Ha ocurrido un error inesperado. Inténtalo de nuevo."; }
@@ -146,6 +154,8 @@ public partial class Home : ComponentBase, IDisposable
 
     private Task CreateTripAsync(TripFormInput input) => RunAsync(async () => { await Api.CreateTripAsync(input.ToTrip(Guid.NewGuid()), CancellationToken.None); State.Feedback = "Viaje creado."; await LoadAsync(); });
     private Task CompleteOnboardingAsync(string name) => RunAsync(async () => { currentUser = await Api.CompleteOnboardingAsync(name, lifetimeCancellation.Token); State.Feedback = $"Perfil de {currentUser.Name} creado."; BeginLoad(); await LoadAsync(); });
+    private Task UpdateCurrentUserAsync(string name) => RunAsync(async () => { currentUser = await Api.UpdateCurrentUserAsync(name, lifetimeCancellation.Token); State.Feedback = "Nombre actualizado."; await LoadAsync(); });
+    private Task DeleteCurrentUserAsync() => RunAsync(async () => { await Api.DeleteCurrentUserAsync("ELIMINAR", lifetimeCancellation.Token); Navigation.NavigateTo("/auth/logout", forceLoad: true); });
     private Task SaveTripAsync(Trip trip) => RunAsync(async () => { await Api.UpdateTripAsync(trip, CancellationToken.None); State.Feedback = "Viaje actualizado."; await LoadAsync(); });
     private Task DeleteTripAsync() => RunAsync(async () => { await Api.DeleteTripAsync(State.SelectedTripId, CancellationToken.None); State.SelectTrip(Guid.Empty); State.Feedback = "Viaje eliminado."; await LoadAsync(); });
     private Task AddTravellerAsync(TravellerInput input) => RunAsync(async () => { if (string.IsNullOrWhiteSpace(input.Name)) { State.Feedback = "Escribe el nombre del viajero."; return; } var profile = await Api.CreateProfileAsync(input.Name.Trim(), input.PackingNotes, input.MedicalNotes, CancellationToken.None); await Api.SetTripProfilesAsync(State.SelectedTripId, State.TripProfiles.Select(item => item.Id).Append(profile.Id).ToArray(), CancellationToken.None); State.Feedback = $"{profile.Name} se ha añadido como viajero."; await LoadAsync(); });

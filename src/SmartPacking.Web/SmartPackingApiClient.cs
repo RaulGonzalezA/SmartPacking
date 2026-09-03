@@ -19,6 +19,20 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
             ?? throw new InvalidOperationException("La API no devolvió el perfil actualizado.");
     }
 
+    public async Task<UserProfile> UpdateCurrentUserAsync(string name, CancellationToken cancellationToken)
+    {
+        var response = await httpClient.PutAsJsonAsync("api/me", new { name }, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<UserProfile>(cancellationToken)
+            ?? throw new InvalidOperationException("La API no devolvió el perfil actualizado.");
+    }
+
+    public async Task DeleteCurrentUserAsync(string confirmation, CancellationToken cancellationToken) =>
+        await EnsureSuccessAsync(await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Delete, "api/me")
+        {
+            Content = JsonContent.Create(new { confirmation })
+        }, cancellationToken));
+
     public async Task<IReadOnlyList<Trip>> GetTripsAsync(CancellationToken cancellationToken) =>
         (await httpClient.GetFromJsonAsync<TripResponse[]>("api/trips", cancellationToken) ?? []).Select(ToTrip).ToArray();
 

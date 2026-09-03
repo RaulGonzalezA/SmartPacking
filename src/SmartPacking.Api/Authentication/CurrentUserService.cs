@@ -18,6 +18,8 @@ public sealed class CurrentUserIdentityAccessor(IHttpContextAccessor httpContext
         var issuer = principal.FindFirstValue("iss") ?? configuration["Authentication:JwtBearer:Authority"]
             ?? throw new InvalidOperationException("No se ha podido determinar el issuer del token.");
         var displayName = principal.FindFirstValue("name") ?? principal.FindFirstValue("preferred_username") ?? principal.FindFirstValue(ClaimTypes.Email) ?? subject;
-        return new ExternalIdentity(issuer, subject, displayName);
+        var emailVerifiedValue = principal.FindFirstValue("https://smartpacking.app/email_verified")
+            ?? principal.FindFirstValue("email_verified");
+        return new ExternalIdentity(issuer, subject, displayName, bool.TryParse(emailVerifiedValue, out var isEmailVerified) && isEmailVerified);
     }
 }

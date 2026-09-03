@@ -1,0 +1,49 @@
+<details class="account-menu">
+    <summary>Mi cuenta</summary>
+    <div class="account-menu-content">
+        <label for="account-name">Nombre</label>
+        <input id="account-name" maxlength="80" autocomplete="name" @bind="name" disabled="@IsBusy" />
+        <button type="button" disabled="@IsBusy" @onclick="SaveAsync">Guardar nombre</button>
+
+        <p class="account-danger-copy">Al borrar la cuenta se eliminan tus viajes, prendas, maletas y perfiles de SmartPacking. La cuenta de inicio de sesión se gestiona en Auth0.</p>
+        <label for="delete-account">Escribe ELIMINAR para confirmar</label>
+        <input id="delete-account" @bind="deletionConfirmation" disabled="@IsBusy" />
+        <button type="button" class="danger" disabled="@(IsBusy || deletionConfirmation != "ELIMINAR")" @onclick="DeleteAsync">Eliminar mis datos</button>
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <p class="feedback error" role="alert">@error</p>
+        }
+    </div>
+</details>
+
+@code {
+    private string name = string.Empty;
+    private string deletionConfirmation = string.Empty;
+    private string? error;
+
+    [Parameter, EditorRequired] public UserProfile User { get; set; } = new(Guid.Empty, string.Empty, false);
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter, EditorRequired] public EventCallback<string> UserUpdated { get; set; }
+    [Parameter, EditorRequired] public EventCallback AccountDeleted { get; set; }
+
+    protected override void OnParametersSet() => name = User.Name;
+
+    private async Task SaveAsync()
+    {
+        var normalizedName = name.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            error = "Escribe un nombre para guardarlo.";
+            return;
+        }
+
+        error = null;
+        await UserUpdated.InvokeAsync(normalizedName);
+    }
+
+    private async Task DeleteAsync()
+    {
+        error = null;
+        await AccountDeleted.InvokeAsync();
+    }
+}

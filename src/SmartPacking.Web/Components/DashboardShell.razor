@@ -4,7 +4,13 @@
             <p class="eyebrow">TU ARMARIO · TU VIAJE · TU MALETA</p>
             <h1>Maleta Inteligente</h1>
         </div>
-        <a class="logout-link" href="/auth/logout" data-enhance-nav="false">Cerrar sesión</a>
+        <div class="account-actions">
+            @if (User is not null)
+            {
+                <AccountPanel User="User" IsBusy="IsBusy" UserUpdated="UserUpdated" AccountDeleted="AccountDeleted" />
+            }
+            <a class="logout-link" href="/auth/logout" data-enhance-nav="false">Cerrar sesión</a>
+        </div>
     </header>
     <nav class="tabs" aria-label="Secciones">
         @foreach (var tab in Tabs)
@@ -36,5 +42,8 @@
     [Parameter] public string? Feedback { get; set; }
     [Parameter] public bool IsLoading { get; set; }
     [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public UserProfile? User { get; set; }
+    [Parameter] public EventCallback<string> UserUpdated { get; set; }
+    [Parameter] public EventCallback AccountDeleted { get; set; }
     [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
 }
