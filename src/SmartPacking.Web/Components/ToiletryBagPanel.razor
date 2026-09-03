@@ -1,0 +1,31 @@
+@using SmartPacking.Domain
+
+<section class="family-section toiletry-bag">
+    <div class="toiletry-heading">
+        <div><p class="type">Bolsa de aseo personal</p><h2>Higiene y salud</h2><p class="muted">Peso orientativo actual: <strong>@EstimatedWeightGrams g</strong>. Marca solo lo que va en la bolsa de este viajero.</p></div>
+        <aside class="toiletry-tip"><strong>✈️ Si viajas en cabina</strong><span>Los líquidos deben ir en envases de hasta 100 ml, dentro de una bolsa transparente.</span></aside>
+    </div>
+    <div class="toiletry-presets"><span>Añadir habitual:</span>@foreach (var preset in Presets) { <button type="button" class="secondary" disabled="@IsBusy" @onclick="() => AddPresetAsync(preset)">+ @preset.Name</button> }</div>
+    <div class="toiletry-items">@foreach (var item in BagItems()) { <label class="@(item.IsPacked ? "packed" : string.Empty)"><input type="checkbox" disabled="@IsBusy" checked="@item.IsPacked" @onchange="args => PackedChanged.InvokeAsync((item, args.Value is bool packed && packed))" /><span>@CategoryName(item.Category)</span><strong>@item.Name</strong><small>~@WeightFor(item) g</small></label> }</div>
+    <div class="toiletry-add"><label>Artículo personal <InputText @bind-Value="newItemName" placeholder="Ej. antihistamínico" /></label><label>Categoría <select disabled="@IsBusy" @bind="newItemCategory"><option value="@ChecklistCategory.Toiletries">Higiene</option><option value="@ChecklistCategory.Health">Salud y medicación</option></select></label><button type="button" disabled="@(IsBusy || string.IsNullOrWhiteSpace(newItemName))" @onclick="AddItemAsync">Añadir a esta bolsa</button></div>
+</section>
+
+@code {
+    private string newItemName = string.Empty;
+    private ChecklistCategory newItemCategory = ChecklistCategory.Toiletries;
+    [Parameter] public IReadOnlyList<ChecklistItem> Items { get; set; } = [];
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public EventCallback<(ChecklistItem Item, bool IsPacked)> PackedChanged { get; set; }
+    [Parameter] public EventCallback<(string Name, ChecklistCategory Category)> Added { get; set; }
+    private static readonly (string Name, ChecklistCategory Category)[] Presets = [("Cepillo de dientes", ChecklistCategory.Toiletries), ("Desodorante", ChecklistCategory.Toiletries), ("Protector solar", ChecklistCategory.Toiletries), ("Analgésico", ChecklistCategory.Health)];
+    private IReadOnlyList<ChecklistItem> BagItems() => Items.Where(item => item.Category is ChecklistCategory.Toiletries or ChecklistCategory.Health).ToArray();
+    private int EstimatedWeightGrams => BagItems().Where(item => item.IsPacked).Sum(WeightFor);
+    private async Task AddItemAsync()
+    {
+        await Added.InvokeAsync((newItemName.Trim(), newItemCategory));
+        newItemName = string.Empty;
+    }
+    private Task AddPresetAsync((string Name, ChecklistCategory Category) preset) => Added.InvokeAsync(preset);
+    private static string CategoryName(ChecklistCategory category) => category == ChecklistCategory.Health ? "Salud" : "Higiene";
+    private static int WeightFor(ChecklistItem item) => item.Name.ToLowerInvariant() switch { var name when name.Contains("cepillo") => 120, var name when name.Contains("desodorante") => 90, var name when name.Contains("protector") => 140, var name when name.Contains("champú") || name.Contains("gel") => 120, var name when name.Contains("crema") => 80, var name when name.Contains("medic") => 60, _ => 70 };
+}

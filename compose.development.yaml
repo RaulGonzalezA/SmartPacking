@@ -1,0 +1,29 @@
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  azurite:
+    ports:
+      - "10000:10000"
+
+  seq:
+    environment:
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+    ports:
+      - "5343:80"
+      - "5344:5341"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "8080:8080"
+
+  web:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development

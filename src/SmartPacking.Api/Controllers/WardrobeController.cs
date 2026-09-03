@@ -10,7 +10,9 @@ namespace SmartPacking.Api.Controllers;
 public sealed class WardrobeController(ISmartPackingStore store) : ControllerBase
 {
     [HttpGet]
-    [ProducesResponseType<ApiResult<IReadOnlyList<ClothingItemResponse>>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResult<IReadOnlyList<ClothingItemResponse>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ApiResult<IReadOnlyList<ClothingItemResponse>>>> GetAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 100, CancellationToken cancellationToken = default)
     {
         if (page < 1 || pageSize is < 1 or > 100)
@@ -24,6 +26,9 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
     }
 
     [HttpGet("deleted")]
+    [ProducesResponseType(typeof(ApiResult<IReadOnlyList<ClothingItemResponse>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ApiResult<IReadOnlyList<ClothingItemResponse>>>> GetDeletedAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 100, CancellationToken cancellationToken = default)
     {
         if (page < 1 || pageSize is < 1 or > 100)
@@ -37,6 +42,9 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
     }
 
     [HttpPost]
+    [ProducesResponseType(typeof(ApiResult<ClothingItemResponse>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ApiResult<ClothingItemResponse>>> CreateAsync(UpsertClothingItemRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name) || request.WarmthLevel is < 1 or > 10)
@@ -50,6 +58,10 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
     }
 
     [HttpPut("{clothingItemId:guid}")]
+    [ProducesResponseType(typeof(ApiResult<ClothingItemResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ApiResult<ClothingItemResponse>>> UpdateAsync(Guid clothingItemId, UpsertClothingItemRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name) || request.WarmthLevel is < 1 or > 10)
@@ -69,6 +81,9 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
     }
 
     [HttpPut("{clothingItemId:guid}/status")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UpdateStatusAsync(Guid clothingItemId, UpdateClothingStatusRequest request, CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
@@ -76,6 +91,9 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
     }
 
     [HttpDelete("{clothingItemId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> DeleteAsync(Guid clothingItemId, CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
@@ -83,6 +101,9 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
     }
 
     [HttpPost("{clothingItemId:guid}/restore")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> RestoreAsync(Guid clothingItemId, CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);

@@ -2,9 +2,9 @@ name: CI Release
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, Development]
   push:
-    branches: [main]
+    branches: [main, Development]
     tags: ["v*"]
 
 permissions:
@@ -38,12 +38,14 @@ jobs:
       - name: Verify formatting
         run: dotnet format SmartPacking.slnx --verify-no-changes --no-restore
 
-      - name: Test Release
+      - name: Test Release and collect OpenCover coverage
         run: >-
           dotnet test SmartPacking.slnx --configuration Release
           --no-build --no-restore
           --logger "trx;LogFileName=tests.trx"
           --results-directory artifacts/test-results
+          --collect:"XPlat Code Coverage"
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
 
       - name: Publish web host
         run: >-

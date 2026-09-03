@@ -3,14 +3,14 @@
 
 @if (Forecast is not null)
 {
-    <section class="family-section">
-        <h2>Previsión diaria</h2>
-        <p class="muted">@Forecast.Destination · @Forecast.MinimumCelsius–@Forecast.MaximumCelsius °C · lluvia máxima @Forecast.RainProbability%</p>
+    <section class="family-section weather-panel">
+        <div class="weather-heading"><div><p class="type">Previsión del viaje</p><h2>@Forecast.Destination</h2><p class="muted">@Forecast.StartDate.ToString("d", CultureInfo.CurrentCulture) – @Forecast.EndDate.ToString("d", CultureInfo.CurrentCulture)</p></div><div class="weather-range"><span>Temperatura prevista</span><strong>@Forecast.MinimumCelsius°–@Forecast.MaximumCelsius°</strong></div></div>
+        <div class="weather-overview" aria-label="Resumen meteorológico"><div><span aria-hidden="true">🌡️</span><strong>@Forecast.MinimumCelsius°–@Forecast.MaximumCelsius°</strong><small>mínima y máxima</small></div><div><span aria-hidden="true">☔</span><strong>@Forecast.RainProbability%</strong><small>lluvia máxima</small></div><div><span aria-hidden="true">📅</span><strong>@Forecast.Daily.Count</strong><small>días previstos</small></div></div>
         <div class="weather-days">
             @foreach (var day in Forecast.Daily)
             {
                 var condition = Condition(day.WeatherCode);
-                <article class="weather-day"><span class="weather-icon" role="img" aria-label="@condition.Label">@condition.Icon</span><div><strong>@day.Date.ToString("ddd d", CultureInfo.CurrentCulture)</strong><span>@condition.Label</span></div><div class="weather-temperatures">@day.MinimumCelsius° / @day.MaximumCelsius°<small>🌡️ @day.ApparentMinimumCelsius–@day.ApparentMaximumCelsius° · 💨 @day.WindSpeedKilometresPerHour km/h</small><small>☔ @day.RainProbability%</small></div></article>
+                <article class="weather-day"><div class="weather-day-title"><span class="weather-icon" role="img" aria-label="@condition.Label">@condition.Icon</span><div><strong>@day.Date.ToString("ddd d", CultureInfo.CurrentCulture)</strong><span>@condition.Label</span></div></div><div class="weather-temperatures"><strong>@day.MinimumCelsius° <span>/</span> @day.MaximumCelsius°</strong><small>Sensación: @day.ApparentMinimumCelsius–@day.ApparentMaximumCelsius°</small></div><div class="weather-details"><span>💨 @day.WindSpeedKilometresPerHour km/h</span><span>☔ @day.RainProbability%</span></div></article>
             }
         </div>
     </section>

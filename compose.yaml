@@ -1,62 +1,60 @@
 services:
   postgres:
     image: postgres:17-alpine
+    mem_limit: 256m
     environment:
-      POSTGRES_DB: smartpacking
-      POSTGRES_USER: smartpacking
-      POSTGRES_PASSWORD: smartpacking
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U smartpacking -d smartpacking"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:3.35.0
+    mem_limit: 192m
     command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --skipApiVersionCheck
-    ports:
-      - "10000:10000"
     volumes:
       - azurite-data:/data
 
   seq:
     image: datalust/seq:2026.1
+    mem_limit: 128m
     environment:
       ACCEPT_EULA: Y
-      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
-    ports:
-      - "5343:80"
-      - "5344:5341"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "false"
     volumes:
       - seq-data:/data
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    mem_limit: 128m
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis-data:/data
 
   api:
+    mem_limit: 384m
     build:
       context: .
       dockerfile: src/SmartPacking.Api/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__SmartPacking: Host=postgres;Port=5432;Database=smartpacking;Username=smartpacking;Password=smartpacking
-      Storage__ConnectionString: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
+      ConnectionStrings__SmartPacking: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Storage__ConnectionString: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=${AZURITE_ACCOUNT_KEY};BlobEndpoint=http://azurite:10000/devstoreaccount1;"
       Storage__PublicBaseUrl: http://localhost:10000/devstoreaccount1
       Storage__Container: wardrobe
       Observability__SeqUrl: http://seq:80
       Observability__OtlpEndpoint: http://seq:5341/ingest/otlp
-      Cache__RedisConnectionString: redis:6379
-    ports:
-      - "8080:8080"
+      Cache__RedisConnectionString: redis:6379,password=${REDIS_PASSWORD}
+      Authentication__Enabled: ${AUTHENTICATION_ENABLED:-true}
+      Authentication__JwtBearer__Authority: ${AUTH0_AUTHORITY}
+      Authentication__JwtBearer__Audience: ${AUTH0_AUDIENCE}
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,13 +71,19 @@ services:
       retries: 12
 
   web:
+    mem_limit: 256m
     build:
       context: .
       dockerfile: src/SmartPacking.Web/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ASPNETCORE_URLS: http://+:8080
       Api__BaseUrl: http://api:8080/
+      Authentication__Enabled: ${AUTHENTICATION_ENABLED:-true}
+      Authentication__OpenIdConnect__Authority: ${AUTH0_AUTHORITY}
+      Authentication__OpenIdConnect__ClientId: ${AUTH0_CLIENT_ID}
+      Authentication__OpenIdConnect__Audience: ${AUTH0_AUDIENCE}
+      Authentication__OpenIdConnect__ClientSecret: ${AUTH0_CLIENT_SECRET}
       Observability__SeqUrl: http://seq:80
       Observability__OtlpEndpoint: http://seq:5341/ingest/otlp
     ports:

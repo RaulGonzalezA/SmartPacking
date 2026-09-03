@@ -36,6 +36,9 @@ public partial class PackingPanel
     public LuggageRulesSummary? LuggageRules { get; set; }
 
     [Parameter]
+    public PackingInsights? Insights { get; set; }
+
+    [Parameter]
     public EventCallback<Guid> SelectedProfileChanged { get; set; }
 
     [Parameter]
@@ -46,6 +49,9 @@ public partial class PackingPanel
 
     [Parameter]
     public EventCallback<(ChecklistItem Item, bool IsPacked)> ChecklistPackedChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<(string Name, ChecklistCategory Category)> ToiletryAdded { get; set; }
 
     private IEnumerable<ClothingItem> AvailableManualClothing => Plan is null
         ? []

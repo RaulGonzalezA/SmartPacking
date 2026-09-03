@@ -5,6 +5,8 @@ namespace SmartPacking.Application;
 /// <summary>Operations required by the interactive web client.</summary>
 public interface IWebSmartPackingClient
 {
+    Task<UserProfile> GetCurrentUserAsync(CancellationToken cancellationToken);
+    Task<UserProfile> CompleteOnboardingAsync(string name, CancellationToken cancellationToken);
     Task<IReadOnlyList<Trip>> GetTripsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<FamilyProfile>> GetProfilesAsync(CancellationToken cancellationToken);
     Task<FamilyProfile> CreateProfileAsync(string name, string? packingNotes, string? medicalNotes, CancellationToken cancellationToken);
@@ -17,7 +19,8 @@ public interface IWebSmartPackingClient
     Task<TripWeatherForecast?> GetWeatherAsync(Guid tripId, CancellationToken cancellationToken);
     Task<LuggageRulesSummary?> GetLuggageRulesAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken);
     Task<IReadOnlyList<ChecklistItem>> GetChecklistAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken);
-    Task CreateTripAsync(string destination, DateOnly startDate, DateOnly endDate, int minimumTemperatureCelsius, int maximumTemperatureCelsius, string? templateKey, int luggageAllowanceGrams, bool cabinOnly, CancellationToken cancellationToken);
+    Task AddProfileChecklistItemAsync(Guid tripId, Guid profileId, ChecklistCategory category, string name, CancellationToken cancellationToken);
+    Task CreateTripAsync(Trip trip, CancellationToken cancellationToken);
     Task UpdateTripAsync(Trip trip, CancellationToken cancellationToken);
     Task DeleteTripAsync(Guid tripId, CancellationToken cancellationToken);
     Task SetTripProfilesAsync(Guid tripId, IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken);

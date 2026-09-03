@@ -5,10 +5,12 @@ using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using SmartPacking.Application;
 using SmartPacking.Api.Contracts;
 using SmartPacking.Contracts;
 using SmartPacking.Domain;
@@ -17,14 +19,20 @@ using Xunit;
 
 namespace SmartPacking.Api.IntegrationTests;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Design",
+    "CA1001:Types that own disposable fields should be disposable",
+    Justification = "xUnit invoca IAsyncLifetime.DisposeAsync para liberar los recursos de cada prueba.")]
 public sealed class WardrobeApiTests : IAsyncLifetime
 {
-    private readonly string databasePath = Path.Combine(Path.GetTempPath(), $"smartpacking-{Guid.NewGuid():N}.db");
+    private SqliteConnection databaseConnection = null!;
     private WebApplicationFactory<Program> factory = null!;
     private HttpClient client = null!;
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
+        databaseConnection = new SqliteConnection("Data Source=:memory:");
+        await databaseConnection.OpenAsync();
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
@@ -32,12 +40,30 @@ public sealed class WardrobeApiTests : IAsyncLifetime
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<SmartPackingDbContext>>();
-                services.AddDbContext<SmartPackingDbContext>(options => options.UseSqlite($"Data Source={databasePath};Pooling=False"));
+                services.RemoveAll<IExternalIdentityAccessor>();
+                services.AddDbContext<SmartPackingDbContext>(options => options.UseSqlite(databaseConnection));
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
+                services.AddScoped<IExternalIdentityAccessor>(_ => new TestExternalIdentityAccessor());
             });
         });
         client = factory.CreateClient();
-        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task AuthenticatedUserMustCompleteOnboardingBeforeUsingTheirProfile()
+    {
+        var currentUser = await client.GetFromJsonAsync<UserProfile>("/api/me");
+        currentUser.Should().NotBeNull();
+        currentUser!.IsOnboarded.Should().BeFalse();
+        currentUser.Name.Should().BeEmpty();
+
+        var response = await client.PostAsJsonAsync("/api/me/onboarding", new { name = "Lucía" });
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var completedUser = await response.Content.ReadFromJsonAsync<UserProfile>();
+        completedUser.Should().Be(new UserProfile(currentUser.Id, "Lucía", true));
+
+        var profiles = await client.GetFromJsonAsync<FamilyProfile[]>("/api/profiles");
+        profiles.Should().ContainSingle(profile => profile.Id == currentUser.Id && profile.Name == "Lucía");
     }
 
     [Fact]
@@ -98,21 +124,15 @@ public sealed class WardrobeApiTests : IAsyncLifetime
         checklist.Should().OnlyContain(item => item.ProfileId == profileId);
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
         client.Dispose();
-        factory.Dispose();
-        if (File.Exists(databasePath))
-        {
-            try
-            {
-                File.Delete(databasePath);
-            }
-            catch (IOException)
-            {
-                // Windows may retain the temporary SQLite handle until test-host shutdown completes.
-            }
-        }
-        return Task.CompletedTask;
+        await factory.DisposeAsync();
+        await databaseConnection.DisposeAsync();
+    }
+
+    private sealed class TestExternalIdentityAccessor : IExternalIdentityAccessor
+    {
+        public ExternalIdentity? GetCurrent() => new("https://issuer.example", "auth0|integration-user", "Perfil externo");
     }
 }

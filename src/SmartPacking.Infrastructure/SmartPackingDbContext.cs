@@ -20,6 +20,7 @@ public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<UserEntity>().HasKey(entity => entity.Id);
+        modelBuilder.Entity<UserEntity>().HasIndex(entity => new { entity.ExternalIssuer, entity.ExternalSubject }).IsUnique();
         modelBuilder.Entity<ClothingItemEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.Name }).IsUnique();
         modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.IsDeleted });
@@ -45,7 +46,14 @@ public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext
     }
 }
 
-public sealed class UserEntity { public Guid Id { get; set; } public string Name { get; set; } = string.Empty; }
+public sealed class UserEntity
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? ExternalIssuer { get; set; }
+    public string? ExternalSubject { get; set; }
+    public bool IsOnboarded { get; set; }
+}
 public sealed class ClothingItemEntity
 {
     public Guid Id { get; set; }
@@ -79,6 +87,14 @@ public sealed class TripEntity
     public string? TemplateKey { get; set; }
     public int LuggageAllowanceGrams { get; set; } = 10000;
     public bool CabinOnly { get; set; } = true;
+    public int LuggageType { get; set; }
+    public int LuggageHeightCentimetres { get; set; } = 55;
+    public int LuggageWidthCentimetres { get; set; } = 40;
+    public int LuggageDepthCentimetres { get; set; } = 20;
+    public string DayPlans { get; set; } = "[]";
+    public string? AirlineCode { get; set; }
+    public string TransportTypes { get; set; } = "[]";
+    public string Luggages { get; set; } = "[]";
 }
 public sealed class PackingListEntity { public Guid Id { get; set; } public Guid TripId { get; set; } public Guid UserId { get; set; } public DateTimeOffset CreatedAt { get; set; } }
 public sealed class PackingListItemEntity { public Guid PackingListId { get; set; } public Guid ClothingItemId { get; set; } public bool IsPacked { get; set; } }

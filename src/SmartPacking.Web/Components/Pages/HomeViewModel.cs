@@ -16,6 +16,8 @@ public sealed class HomeViewModel
     public IReadOnlyList<ClothingItem> Wardrobe { get; set; } = [];
     public IReadOnlyList<ClothingItem> DeletedWardrobe { get; set; } = [];
     public ProfileTripPackingPlan? Plan { get; set; }
+    public IReadOnlyList<ProfileTripPackingPlan> FamilyPlans { get; set; } = [];
+    public PackingInsights? PackingInsights { get; set; }
     public TripWeatherForecast? Weather { get; set; }
     public LuggageRulesSummary? LuggageRules { get; set; }
     public IReadOnlyList<ChecklistItem> Checklist { get; set; } = [];
@@ -32,5 +34,5 @@ public sealed class HomeViewModel
     public void SelectProfile(Guid profileId) => SelectedProfileId = profileId;
     public void SelectInitialTrip() { if (SelectedTripId == Guid.Empty) SelectedTripId = Trips.FirstOrDefault()?.Id ?? Guid.Empty; }
     public void EnsureSelectedProfile() { if (SelectedProfileId == Guid.Empty || !TripProfiles.Any(profile => profile.Id == SelectedProfileId)) SelectedProfileId = TripProfiles.FirstOrDefault()?.Id ?? Guid.Empty; }
-    public void ClearSelectedTripData() { TripProfiles = []; Plan = null; Weather = null; LuggageRules = null; Checklist = []; PreparationProgress = []; UsageItemIds = new HashSet<Guid>(); UsedItemIds = new HashSet<Guid>(); }
+    public void ClearSelectedTripData() { TripProfiles = []; Plan = null; FamilyPlans = []; PackingInsights = null; Weather = null; LuggageRules = null; Checklist = []; PreparationProgress = []; UsageItemIds = new HashSet<Guid>(); UsedItemIds = new HashSet<Guid>(); }
 }

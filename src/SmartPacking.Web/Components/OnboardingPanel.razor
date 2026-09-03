@@ -1,0 +1,42 @@
+<main class="onboarding-page">
+    <section class="onboarding-card" aria-labelledby="onboarding-title">
+        <span class="eyebrow">BIENVENIDO A SMARTPACKING</span>
+        <h1 id="onboarding-title">Antes de empezar, ¿cómo te llamas?</h1>
+        <p>Usaremos este nombre para crear tu perfil principal y asignarte automáticamente tus prendas y maletas.</p>
+
+        <label for="onboarding-name">Nombre</label>
+        <input id="onboarding-name" maxlength="80" autocomplete="name" placeholder="Por ejemplo, Ana García" @bind="name" @bind:event="oninput" disabled="@IsBusy" />
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <p class="feedback error" role="alert">@error</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(Feedback))
+        {
+            <p class="feedback error" role="alert">@Feedback</p>
+        }
+        <button type="button" disabled="@IsBusy" @onclick="SaveAsync">@((IsBusy) ? "Guardando…" : "Crear mi perfil y continuar")</button>
+        <p class="muted">Después podrás añadir otros viajeros y completar sus necesidades de equipaje.</p>
+    </section>
+</main>
+
+@code {
+    private string name = string.Empty;
+    private string? error;
+
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public string? Feedback { get; set; }
+    [Parameter, EditorRequired] public EventCallback<string> Completed { get; set; }
+
+    private async Task SaveAsync()
+    {
+        var normalizedName = name.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            error = "Escribe tu nombre para continuar.";
+            return;
+        }
+
+        error = null;
+        await Completed.InvokeAsync(normalizedName);
+    }
+}

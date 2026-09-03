@@ -265,8 +265,15 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("AirlineCode")
+                        .HasColumnType("text");
+
                     b.Property<bool>("CabinOnly")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("DayPlans")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Destination")
                         .IsRequired()
@@ -278,6 +285,22 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                     b.Property<int>("LuggageAllowanceGrams")
                         .HasColumnType("integer");
 
+                    b.Property<int>("LuggageDepthCentimetres")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LuggageHeightCentimetres")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LuggageType")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LuggageWidthCentimetres")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Luggages")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("MaximumTemperatureCelsius")
                         .HasColumnType("integer");
 
@@ -288,6 +311,10 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                         .HasColumnType("date");
 
                     b.Property<string>("TemplateKey")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TransportTypes")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<Guid>("UserId")
@@ -324,11 +351,23 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ExternalIssuer")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExternalSubject")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsOnboarded")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExternalIssuer", "ExternalSubject")
+                        .IsUnique();
 
                     b.ToTable("Users");
                 });

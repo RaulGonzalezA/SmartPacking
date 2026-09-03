@@ -10,6 +10,11 @@ namespace SmartPacking.Api.Controllers;
 public sealed class WardrobePhotosController(ISmartPackingStore store, IPhotoStorage photoStorage) : ControllerBase
 {
     [HttpPost("{clothingItemId:guid}/photo")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResult<PhotoUploadResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> UploadAsync(Guid clothingItemId, IFormFile photo, CancellationToken cancellationToken)
     {
         if (photo.Length == 0 || photo.Length > 5 * 1024 * 1024 || !string.Equals(photo.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))

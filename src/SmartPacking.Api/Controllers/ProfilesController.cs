@@ -87,4 +87,26 @@ public sealed class ProfilesController(ISmartPackingStore store, ProfilePackingL
             ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Perfil o viaje no encontrado")
             : Ok(plan);
     }
+
+    [HttpPost("trips/{tripId:guid}/profiles/{profileId:guid}/checklist")]
+    [ProducesResponseType(typeof(ChecklistItem), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ChecklistItem>> AddProfileChecklistItemAsync(Guid tripId, Guid profileId, CreateChecklistItemRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["name"] = ["Escribe el nombre del artículo."] }));
+        }
+
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        if (!(await store.GetTripProfilesAsync(user.Id, tripId, cancellationToken)).Any(profile => profile.Id == profileId))
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Perfil o viaje no encontrado");
+        }
+
+        var item = new ChecklistItem(Guid.NewGuid(), tripId, request.Category, request.Name.Trim(), false, profileId);
+        await store.AddChecklistItemsAsync(user.Id, [item], cancellationToken);
+        return Created($"/api/trips/{tripId}/profiles/{profileId}/checklist/{item.Id}", item);
+    }
 }

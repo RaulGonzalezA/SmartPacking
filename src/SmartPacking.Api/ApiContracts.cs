@@ -11,6 +11,7 @@ public sealed record UpdateTripRequest(string Destination, DateOnly StartDate, D
 public sealed record AddPackingListItemRequest(Guid ClothingItemId);
 public sealed record CreateFamilyProfileRequest(string Name, string? PackingNotes = null, string? MedicalNotes = null);
 public sealed record UpdateFamilyProfileRequest(string Name, string? PackingNotes = null, string? MedicalNotes = null);
+public sealed record CompleteUserOnboardingRequest(string Name);
 public sealed record SetTripProfilesRequest(IReadOnlyCollection<Guid> ProfileIds);
 public sealed record SaveUserTripTemplateRequest(string Name, string? Description, IReadOnlyCollection<Style> Activities, int MinimumTemperatureCelsius, int MaximumTemperatureCelsius, int LuggageAllowanceGrams, bool CabinOnly);
 #pragma warning restore S6964

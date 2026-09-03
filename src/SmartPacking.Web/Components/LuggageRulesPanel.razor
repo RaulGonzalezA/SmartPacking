@@ -7,6 +7,7 @@
         <p class="@(Rules.IsWithinAllowance ? "muted" : "feedback")">@Rules.PlannedWeightGrams g de @Rules.AllowanceGrams g · @(Rules.IsWithinAllowance ? $"Quedan {Rules.RemainingGrams} g" : $"Exceso de {-Rules.RemainingGrams} g")</p>
         <div class="capacity-track" aria-label="Capacidad ocupada"><i class="@(Rules.IsWithinAllowance ? string.Empty : "over-capacity")" style="width:@Percent%"></i></div>
         <p class="muted">@Percent% del límite de peso utilizado.</p>
+        @if (Rules.CapacityVolumeMillilitres > 0) { <p class="muted">Volumen estimado: @(Rules.PlannedVolumeMillilitres / 1000m) L de @(Rules.CapacityVolumeMillilitres / 1000m) L disponibles.</p> }
         @if (Rules.CabinOnly) { <p class="muted">Cabina: recipientes de hasta @Rules.LiquidContainerMaximumMilliliters ml, en una bolsa de hasta @Rules.CabinLiquidsBagMaximumMilliliters ml.</p> }
     </section>
 }
