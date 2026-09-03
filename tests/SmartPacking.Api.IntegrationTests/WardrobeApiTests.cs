@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using SmartPacking.Application;
 using SmartPacking.Api.Contracts;
 using SmartPacking.Contracts;
 using SmartPacking.Domain;
@@ -39,11 +40,30 @@ public sealed class WardrobeApiTests : IAsyncLifetime
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<SmartPackingDbContext>>();
+                services.RemoveAll<IExternalIdentityAccessor>();
                 services.AddDbContext<SmartPackingDbContext>(options => options.UseSqlite(databaseConnection));
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
+                services.AddScoped<IExternalIdentityAccessor>(_ => new TestExternalIdentityAccessor());
             });
         });
         client = factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task AuthenticatedUserMustCompleteOnboardingBeforeUsingTheirProfile()
+    {
+        var currentUser = await client.GetFromJsonAsync<UserProfile>("/api/me");
+        currentUser.Should().NotBeNull();
+        currentUser!.IsOnboarded.Should().BeFalse();
+        currentUser.Name.Should().BeEmpty();
+
+        var response = await client.PostAsJsonAsync("/api/me/onboarding", new { name = "Lucía" });
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var completedUser = await response.Content.ReadFromJsonAsync<UserProfile>();
+        completedUser.Should().Be(new UserProfile(currentUser.Id, "Lucía", true));
+
+        var profiles = await client.GetFromJsonAsync<FamilyProfile[]>("/api/profiles");
+        profiles.Should().ContainSingle(profile => profile.Id == currentUser.Id && profile.Name == "Lucía");
     }
 
     [Fact]
@@ -109,5 +129,10 @@ public sealed class WardrobeApiTests : IAsyncLifetime
         client.Dispose();
         await factory.DisposeAsync();
         await databaseConnection.DisposeAsync();
+    }
+
+    private sealed class TestExternalIdentityAccessor : IExternalIdentityAccessor
+    {
+        public ExternalIdentity? GetCurrent() => new("https://issuer.example", "auth0|integration-user", "Perfil externo");
     }
 }

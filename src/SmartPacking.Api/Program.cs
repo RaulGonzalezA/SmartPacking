@@ -5,14 +5,11 @@ using SmartPacking.Api.DependencyInjection;
 using SmartPacking.Application;
 using SmartPacking.Infrastructure;
 using Scalar.AspNetCore;
-using SmartPacking.Api.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartPackingObservability();
 
-// Registrar acceso al contexto HTTP y el accessor de identidad externa
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<IExternalIdentityAccessor, HttpContextExternalIdentityAccessor>();
+var authenticationEnabled = builder.Services.AddSmartPackingAuthentication(builder.Configuration);
 
 builder.Services
     .AddSmartPackingApi()
@@ -41,6 +38,11 @@ app.UseStaticFiles();
 app.UseExceptionHandler();
 app.UseAntiforgery();
 app.UseSerilogRequestLogging();
+if (authenticationEnabled)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -48,7 +50,11 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference("/scalar", options => options.Title = "SmartPacking API");
 }
 
-app.MapControllers();
+var controllers = app.MapControllers();
+if (authenticationEnabled)
+{
+    controllers.RequireAuthorization();
+}
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = registration => registration.Tags.Contains("ready") });
 app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = _ => false });
 

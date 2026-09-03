@@ -1,8 +1,19 @@
 @page "/"
 @rendermode InteractiveServer
 
+@if (currentUser is null)
+{
+    <main><p class="muted" role="status">Cargando tu perfil…</p></main>
+}
+else if (!currentUser.IsOnboarded)
+{
+    <OnboardingPanel IsBusy="State.IsBusy" Feedback="State.Feedback" Completed="CompleteOnboardingAsync" />
+}
+else
+{
 <DashboardShell ActiveTab="State.ActiveTab" ActiveTabChanged="State.SelectTab" Feedback="@State.Feedback" IsLoading="State.IsLoading" IsBusy="State.IsBusy">
     <TripsPanel IsActive="@(State.ActiveTab == "trips")" IsBusy="State.IsBusy" Trips="State.Trips" Profiles="State.Profiles" Templates="State.Templates" TripProfiles="State.TripProfiles" Wardrobe="State.Wardrobe" SelectedTripId="State.SelectedTripId" SelectedTripChanged="SelectTripAsync" Weather="State.Weather" UsageItemIds="State.UsageItemIds" UsedItemIds="State.UsedItemIds" IsCompleted="@IsSelectedTripCompleted" WeatherUnavailableMessage="@WeatherUnavailableMessage" Created="CreateTripAsync" Updated="SaveTripAsync" Deleted="DeleteTripAsync" TravellersSaved="SaveTravellersAsync" TravellerAdded="AddTravellerAsync" TravellerUpdated="SaveTravellerAsync" Archived="ArchiveTravellerAsync" UsageSaved="SaveUsageAsync" />
     <WardrobePanel @ref="wardrobePanel" IsActive="@(State.ActiveTab == "wardrobe")" IsBusy="State.IsBusy" Items="State.Wardrobe" DeletedItems="State.DeletedWardrobe" Profiles="State.Profiles" Created="data => RunAsync(() => CreateClothingAsync(data.Name, data.Color, data.OwnerId, data.Type, data.WeightGrams))" Changed="data => RunAsync(() => UpdateStatusAsync(data.Item, data.Clean, data.Available))" Removed="id => RunAsync(() => DeleteClothingAsync(id))" Restored="id => RunAsync(() => RestoreClothingAsync(id))" PhotoSelected="data => RunAsync(() => UploadClothingPhotoAsync(data.ItemId, data.File))" />
     <PackingPanel IsActive="@(State.ActiveTab == "packing")" IsBusy="State.IsBusy" Plan="State.Plan" TripProfiles="State.TripProfiles" SelectedProfileId="State.SelectedProfileId" SelectedProfileChanged="SelectProfileAsync" Wardrobe="State.Wardrobe" Checklist="State.Checklist" PreparationProgress="State.PreparationProgress" LuggageRules="State.LuggageRules" Insights="State.PackingInsights" PackedChanged="SetPackedAsync" ManualClothingAdded="AddManualClothingAsync" ChecklistPackedChanged="SetChecklistPackedAsync" ToiletryAdded="AddToiletryAsync" />
 </DashboardShell>
+}

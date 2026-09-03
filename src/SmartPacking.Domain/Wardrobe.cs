@@ -59,7 +59,7 @@ public sealed record ClothingItem(
     Guid? OwnerProfileId = null,
     string? PhotoUrl = null);
 
-public sealed record UserProfile(Guid Id, string Name);
+public sealed record UserProfile(Guid Id, string Name, bool IsOnboarded);
 public sealed record FamilyProfile(Guid Id, string Name, bool IsArchived = false, string? PackingNotes = null, string? MedicalNotes = null);
 
 public sealed record PackingList(Guid Id, Guid TripId, Guid UserId, DateTimeOffset CreatedAt, IReadOnlyCollection<PackingListItem> Items);

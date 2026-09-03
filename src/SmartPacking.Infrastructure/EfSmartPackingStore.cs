@@ -47,7 +47,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
             return;
         }
 
-        dbContext.Users.Add(new UserEntity { Id = DefaultUserId, Name = "Raúl" });
+        dbContext.Users.Add(new UserEntity { Id = DefaultUserId, Name = "Raúl", IsOnboarded = true });
         dbContext.FamilyProfiles.Add(new FamilyProfileEntity { Id = DefaultUserId, UserId = DefaultUserId, Name = "Raúl" });
         dbContext.Trips.Add(ToEntity(DefaultUserId, DemoData.RomeTrip));
         dbContext.ClothingItems.AddRange(DemoData.Wardrobe.Select(item => ToEntity(DefaultUserId, item)));
@@ -63,22 +63,61 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         }
 
         var user = await dbContext.Users.SingleAsync(cancellationToken);
-        return new UserProfile(user.Id, user.Name);
+        return ToDomain(user);
     }
 
     public async Task<UserProfile> GetOrCreateUserAsync(string issuer, string subject, string displayName, CancellationToken cancellationToken)
     {
-        var userId = CreateUserId(issuer, subject);
-        var user = await dbContext.Users.SingleOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken);
+        var normalizedIssuer = issuer.TrimEnd('/');
+        var user = await dbContext.Users.SingleOrDefaultAsync(candidate => candidate.ExternalIssuer == normalizedIssuer && candidate.ExternalSubject == subject, cancellationToken);
         if (user is null)
         {
-            user = new UserEntity { Id = userId, Name = string.IsNullOrWhiteSpace(displayName) ? "Viajero" : displayName.Trim() };
-            dbContext.Users.Add(user);
-            dbContext.FamilyProfiles.Add(new FamilyProfileEntity { Id = userId, UserId = userId, Name = user.Name });
-            await dbContext.SaveChangesAsync(cancellationToken);
+            var legacyUserId = CreateUserId(normalizedIssuer, subject);
+            user = await dbContext.Users.SingleOrDefaultAsync(candidate => candidate.Id == legacyUserId, cancellationToken);
+            if (user is not null)
+            {
+                user.ExternalIssuer = normalizedIssuer;
+                user.ExternalSubject = subject;
+                user.IsOnboarded = true;
+            }
         }
 
-        return new UserProfile(user.Id, user.Name);
+        if (user is null)
+        {
+            user = new UserEntity
+            {
+                Id = Guid.NewGuid(),
+                ExternalIssuer = normalizedIssuer,
+                ExternalSubject = subject,
+                Name = string.Empty,
+                IsOnboarded = false
+            };
+            dbContext.Users.Add(user);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDomain(user);
+    }
+
+    public async Task<UserProfile> CompleteUserOnboardingAsync(Guid userId, string name, CancellationToken cancellationToken)
+    {
+        var user = await dbContext.Users.SingleAsync(candidate => candidate.Id == userId, cancellationToken);
+        user.Name = name;
+        user.IsOnboarded = true;
+
+        var mainProfile = await dbContext.FamilyProfiles.SingleOrDefaultAsync(profile => profile.Id == userId, cancellationToken);
+        if (mainProfile is null)
+        {
+            dbContext.FamilyProfiles.Add(new FamilyProfileEntity { Id = userId, UserId = userId, Name = name });
+        }
+        else
+        {
+            mainProfile.Name = name;
+            mainProfile.IsArchived = false;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToDomain(user);
     }
 
     private static Guid CreateUserId(string issuer, string subject)
@@ -115,7 +154,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
 
     public async Task<bool> ArchiveFamilyProfileAsync(Guid userId, Guid profileId, CancellationToken cancellationToken)
     {
-        if (profileId == DefaultUserId)
+        if (profileId == userId)
         {
             return false;
         }
@@ -445,6 +484,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
     };
     private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId, item.PhotoUrl);
     private static FamilyProfile ToDomain(FamilyProfileEntity profile) => new(profile.Id, profile.Name, profile.IsArchived, profile.PackingNotes, profile.MedicalNotes);
+    private static UserProfile ToDomain(UserEntity user) => new(user.Id, user.Name, user.IsOnboarded);
     private static UserTripTemplate ToDomain(UserTripTemplateEntity template) => new(template.Id, template.UserId, template.Name, template.Description, JsonSerializer.Deserialize<Style[]>(template.Activities) ?? [], template.MinimumTemperatureCelsius, template.MaximumTemperatureCelsius, template.LuggageAllowanceGrams, template.CabinOnly);
     private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities), TemplateKey = trip.TemplateKey, LuggageAllowanceGrams = trip.LuggageAllowanceGrams, CabinOnly = trip.CabinOnly, LuggageType = (int)trip.LuggageType, LuggageHeightCentimetres = trip.LuggageHeightCentimetres, LuggageWidthCentimetres = trip.LuggageWidthCentimetres, LuggageDepthCentimetres = trip.LuggageDepthCentimetres, DayPlans = JsonSerializer.Serialize(trip.DayPlansOrEmpty), AirlineCode = trip.AirlineCode, TransportTypes = JsonSerializer.Serialize(trip.TransportTypesOrEmpty), Luggages = JsonSerializer.Serialize(trip.LuggagesOrDefault) };
     private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? [], trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (LuggageType)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, JsonSerializer.Deserialize<TripDayPlan[]>(trip.DayPlans) ?? [], trip.AirlineCode, JsonSerializer.Deserialize<TransportType[]>(trip.TransportTypes) ?? [], JsonSerializer.Deserialize<TripLuggage[]>(trip.Luggages) ?? []);

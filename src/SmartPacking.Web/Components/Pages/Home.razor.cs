@@ -16,13 +16,23 @@ public partial class Home : ComponentBase, IDisposable
     private readonly CancellationTokenSource lifetimeCancellation = new();
     private CancellationTokenSource? loadCancellation;
     private WardrobePanel? wardrobePanel;
+    private UserProfile? currentUser;
 
     protected HomeViewModel State { get; } = new();
 
     protected override Task OnInitializedAsync()
     {
         BeginLoad();
-        return RunAsync(LoadAsync, true);
+        return RunAsync(InitializeAsync, true);
+    }
+
+    private async Task InitializeAsync()
+    {
+        currentUser = await Api.GetCurrentUserAsync(LoadCancellationToken);
+        if (currentUser.IsOnboarded)
+        {
+            await LoadAsync();
+        }
     }
 
     private bool IsSelectedTripCompleted => State.Trips.SingleOrDefault(trip => trip.Id == State.SelectedTripId)?.GetStatus(DateOnly.FromDateTime(DateTime.Today)) == TripStatus.Completed;
@@ -135,6 +145,7 @@ public partial class Home : ComponentBase, IDisposable
     }
 
     private Task CreateTripAsync(TripFormInput input) => RunAsync(async () => { await Api.CreateTripAsync(input.ToTrip(Guid.NewGuid()), CancellationToken.None); State.Feedback = "Viaje creado."; await LoadAsync(); });
+    private Task CompleteOnboardingAsync(string name) => RunAsync(async () => { currentUser = await Api.CompleteOnboardingAsync(name, lifetimeCancellation.Token); State.Feedback = $"Perfil de {currentUser.Name} creado."; BeginLoad(); await LoadAsync(); });
     private Task SaveTripAsync(Trip trip) => RunAsync(async () => { await Api.UpdateTripAsync(trip, CancellationToken.None); State.Feedback = "Viaje actualizado."; await LoadAsync(); });
     private Task DeleteTripAsync() => RunAsync(async () => { await Api.DeleteTripAsync(State.SelectedTripId, CancellationToken.None); State.SelectTrip(Guid.Empty); State.Feedback = "Viaje eliminado."; await LoadAsync(); });
     private Task AddTravellerAsync(TravellerInput input) => RunAsync(async () => { if (string.IsNullOrWhiteSpace(input.Name)) { State.Feedback = "Escribe el nombre del viajero."; return; } var profile = await Api.CreateProfileAsync(input.Name.Trim(), input.PackingNotes, input.MedicalNotes, CancellationToken.None); await Api.SetTripProfilesAsync(State.SelectedTripId, State.TripProfiles.Select(item => item.Id).Append(profile.Id).ToArray(), CancellationToken.None); State.Feedback = $"{profile.Name} se ha añadido como viajero."; await LoadAsync(); });

@@ -10,6 +10,19 @@ namespace SmartPacking.Web.Tests;
 public sealed class PanelRenderingTests : BunitContext
 {
     [Fact]
+    public async Task OnboardingPanelSendsTheProvidedName()
+    {
+        string? completedName = null;
+        var cut = Render<OnboardingPanel>(parameters => parameters
+            .Add(component => component.Completed, EventCallback.Factory.Create<string>(this, value => completedName = value)));
+
+        await cut.Find("input").InputAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "  Lucía  " });
+        await cut.Find("button").ClickAsync();
+
+        completedName.Should().Be("Lucía");
+    }
+
+    [Fact]
     public async Task TripsPanelSavesAnEditedTraveller()
     {
         var profile = new FamilyProfile(Guid.NewGuid(), "Ana", false, "Gafas", "Ninguna");

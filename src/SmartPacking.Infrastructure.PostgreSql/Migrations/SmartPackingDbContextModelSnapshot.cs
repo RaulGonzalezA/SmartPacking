@@ -351,11 +351,23 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ExternalIssuer")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExternalSubject")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsOnboarded")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExternalIssuer", "ExternalSubject")
+                        .IsUnique();
 
                     b.ToTable("Users");
                 });
