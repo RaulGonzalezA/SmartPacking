@@ -18,9 +18,9 @@ En **Applications > Applications > Create Application**, crea una **Regular Web 
 
 En sus URLs permitidas añade, para desarrollo:
 
-- Allowed Callback URLs: `http://127.0.0.1:54272/signin-oidc`
-- Allowed Logout URLs: `http://127.0.0.1:54272/`
-- Allowed Web Origins: `http://127.0.0.1:54272`
+- Allowed Callback URLs: `https://localhost:61629/signin-oidc`
+- Allowed Logout URLs: `https://localhost:61629/signout-callback-oidc`
+- Allowed Web Origins: `https://localhost:61629`
 
 Habilita una conexión de base de datos en **Authentication > Database** para permitir el registro con correo y contraseña. Auth0 mostrará esa opción al acceder a `Crear cuenta`.
 

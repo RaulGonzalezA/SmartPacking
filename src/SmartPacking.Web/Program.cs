@@ -73,7 +73,7 @@ if (authenticationEnabled)
         properties.Items["screen_hint"] = "signup";
         return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
     });
-    app.MapGet("/auth/logout", () => Results.SignOut(new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/" }, [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]));
+    app.MapGet("/auth/logout", () => Results.SignOut(new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/login" }, [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]));
 }
 app.UseAntiforgery();
 var components = app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
