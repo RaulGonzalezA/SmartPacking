@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SmartPacking.Application;
+using SmartPacking.Api.Identity;
 
 namespace SmartPacking.Api.DependencyInjection;
 

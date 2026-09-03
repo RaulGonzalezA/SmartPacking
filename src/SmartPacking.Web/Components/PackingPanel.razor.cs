@@ -51,7 +51,7 @@ public partial class PackingPanel
     public EventCallback<(ChecklistItem Item, bool IsPacked)> ChecklistPackedChanged { get; set; }
 
     [Parameter]
-    public EventCallback<string> ToiletryAdded { get; set; }
+    public EventCallback<(string Name, ChecklistCategory Category)> ToiletryAdded { get; set; }
 
     private IEnumerable<ClothingItem> AvailableManualClothing => Plan is null
         ? []

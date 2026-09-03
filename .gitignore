@@ -1,4 +1,5 @@
 .vs/
+.env
 **/bin/
 **/obj/
 src/SmartPacking.Api/smartpacking.db*
@@ -7,3 +8,5 @@ src/SmartPacking.Web/data-protection-keys/
 /.sonarqube
 /TestResults/Sonar/20260902-151303
 /TestResults/Sonar/20260902-155706
+/TestResults/
+/artifacts/

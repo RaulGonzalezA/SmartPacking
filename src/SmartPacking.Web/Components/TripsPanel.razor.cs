@@ -73,7 +73,16 @@ public partial class TripsPanel
     }
     private void StartEditingTrip() { editingTrip = Trips.SingleOrDefault(trip => trip.Id == SelectedTripId); if (editingTrip is not null) editTrip.CopyFrom(editingTrip); }
     private void CancelEditingTrip() => editingTrip = null;
-    private async Task SaveTrip() { if (editingTrip is not null) await Updated.InvokeAsync(editTrip.ToTrip(editingTrip.Id)); }
+    private async Task SaveTrip()
+    {
+        if (editingTrip is null)
+        {
+            return;
+        }
+
+        await Updated.InvokeAsync(editTrip.ToTrip(editingTrip.Id));
+        CancelEditingTrip();
+    }
     private void SetTraveller(Guid id, bool selected) { if (selected) tripProfileIds.Add(id); else tripProfileIds.Remove(id); }
     private Task SaveTravellers() => TravellersSaved.InvokeAsync(tripProfileIds);
     private async Task AddTraveller() { if (!string.IsNullOrWhiteSpace(newTravellerName)) { await TravellerAdded.InvokeAsync(new(newTravellerName, newTravellerPackingNotes, newTravellerMedicalNotes)); newTravellerName = newTravellerPackingNotes = newTravellerMedicalNotes = string.Empty; } }

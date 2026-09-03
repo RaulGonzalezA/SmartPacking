@@ -1,11 +1,13 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using SmartPacking.Application;
 using SmartPacking.Domain;
 
 namespace SmartPacking.Infrastructure;
 
-public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmartPackingStore
+public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExternalIdentityAccessor identityAccessor) : ISmartPackingStore
 {
     private static readonly Guid DefaultUserId = Guid.Parse("90ae4435-5a54-42dc-a0a4-4f8aa4d96f90");
 
@@ -54,8 +56,35 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext) : ISmar
 
     public async Task<UserProfile> GetDefaultUserAsync(CancellationToken cancellationToken)
     {
+        var identity = identityAccessor.GetCurrent();
+        if (identity is not null)
+        {
+            return await GetOrCreateUserAsync(identity.Issuer, identity.Subject, identity.DisplayName, cancellationToken);
+        }
+
         var user = await dbContext.Users.SingleAsync(cancellationToken);
         return new UserProfile(user.Id, user.Name);
+    }
+
+    public async Task<UserProfile> GetOrCreateUserAsync(string issuer, string subject, string displayName, CancellationToken cancellationToken)
+    {
+        var userId = CreateUserId(issuer, subject);
+        var user = await dbContext.Users.SingleOrDefaultAsync(candidate => candidate.Id == userId, cancellationToken);
+        if (user is null)
+        {
+            user = new UserEntity { Id = userId, Name = string.IsNullOrWhiteSpace(displayName) ? "Viajero" : displayName.Trim() };
+            dbContext.Users.Add(user);
+            dbContext.FamilyProfiles.Add(new FamilyProfileEntity { Id = userId, UserId = userId, Name = user.Name });
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return new UserProfile(user.Id, user.Name);
+    }
+
+    private static Guid CreateUserId(string issuer, string subject)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"{issuer.TrimEnd('/')}\n{subject}"));
+        return new Guid(hash[..16]);
     }
 
     public async Task<IReadOnlyList<FamilyProfile>> GetFamilyProfilesAsync(Guid userId, CancellationToken cancellationToken) =>

@@ -5,9 +5,15 @@ using SmartPacking.Api.DependencyInjection;
 using SmartPacking.Application;
 using SmartPacking.Infrastructure;
 using Scalar.AspNetCore;
+using SmartPacking.Api.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartPackingObservability();
+
+// Registrar acceso al contexto HTTP y el accessor de identidad externa
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IExternalIdentityAccessor, HttpContextExternalIdentityAccessor>();
+
 builder.Services
     .AddSmartPackingApi()
     .AddSmartPackingApplication()
