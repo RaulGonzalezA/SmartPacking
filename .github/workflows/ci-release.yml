@@ -2,9 +2,9 @@ name: CI Release
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, Development]
   push:
-    branches: [main]
+    branches: [main, Development]
     tags: ["v*"]
 
 permissions:
