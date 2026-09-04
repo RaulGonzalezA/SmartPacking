@@ -1,32 +1,77 @@
-<details class="account-menu">
-    <summary>Mi cuenta</summary>
-    <div class="account-menu-content">
-        <label for="account-name">Nombre</label>
-        <input id="account-name" maxlength="80" autocomplete="name" @bind="name" disabled="@IsBusy" />
-        <button type="button" disabled="@IsBusy" @onclick="SaveAsync">Guardar nombre</button>
+<button type="button" class="account-trigger" @onclick="Open">Mi cuenta</button>
 
-        <p class="account-danger-copy">Al borrar la cuenta se eliminan tus viajes, prendas, maletas y perfiles de SmartPacking. La cuenta de inicio de sesión se gestiona en Auth0.</p>
-        <label for="delete-account">Escribe ELIMINAR para confirmar</label>
-        <input id="delete-account" @bind="deletionConfirmation" disabled="@IsBusy" />
-        <button type="button" class="danger" disabled="@(IsBusy || deletionConfirmation != "ELIMINAR")" @onclick="DeleteAsync">Eliminar mis datos</button>
-        @if (!string.IsNullOrWhiteSpace(error))
-        {
-            <p class="feedback error" role="alert">@error</p>
-        }
+@if (isOpen)
+{
+    <div class="account-modal-backdrop" @onclick="Close">
+        <section class="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title" @onclick:stopPropagation="true">
+            <header>
+                <div>
+                    <span class="eyebrow">CONFIGURACIÓN</span>
+                    <h2 id="account-title">Mi cuenta</h2>
+                </div>
+                <button type="button" class="icon-button" aria-label="Cerrar" @onclick="Close">×</button>
+            </header>
+
+            <section class="account-section">
+                <h3>Seguridad y correo</h3>
+                <p><strong>@Email</strong></p>
+                @if (IsEmailVerified)
+                {
+                    <p class="account-status verified">Correo verificado</p>
+                }
+                else
+                {
+                    <p class="account-status pending">Correo pendiente de confirmación</p>
+                }
+                <p class="muted">La contraseña, recuperación de acceso y verificación de correo se gestionan de forma segura con Auth0.</p>
+            </section>
+
+            <section class="account-section">
+                <h3>Perfil</h3>
+                <label for="account-name">Nombre</label>
+                <input id="account-name" maxlength="80" autocomplete="name" @bind="name" disabled="@IsBusy" />
+                <label for="account-address">Dirección o ciudad de salida habitual</label>
+                <input id="account-address" maxlength="160" autocomplete="street-address" placeholder="Ej. Ocaña, Toledo" @bind="address" disabled="@IsBusy" />
+                <button type="button" disabled="@IsBusy" @onclick="SaveAsync">Guardar perfil</button>
+            </section>
+
+            <section class="account-section account-danger-section">
+                <h3>Eliminar datos de SmartPacking</h3>
+                <p>Se eliminarán viajes, prendas, maletas, perfiles y checklists. La cuenta de acceso de Auth0 no se elimina.</p>
+                <label for="delete-account">Escribe ELIMINAR para confirmar</label>
+                <input id="delete-account" @bind="deletionConfirmation" disabled="@IsBusy" />
+                <button type="button" class="danger" disabled="@(IsBusy || deletionConfirmation != "ELIMINAR")" @onclick="DeleteAsync">Eliminar mis datos</button>
+            </section>
+            @if (!string.IsNullOrWhiteSpace(error))
+            {
+                <p class="feedback error" role="alert">@error</p>
+            }
+        </section>
     </div>
-</details>
+}
 
 @code {
+    private bool isOpen;
     private string name = string.Empty;
+    private string address = string.Empty;
     private string deletionConfirmation = string.Empty;
     private string? error;
 
     [Parameter, EditorRequired] public UserProfile User { get; set; } = new(Guid.Empty, string.Empty, false);
+    [Parameter] public string? Email { get; set; }
+    [Parameter] public bool IsEmailVerified { get; set; }
     [Parameter] public bool IsBusy { get; set; }
-    [Parameter, EditorRequired] public EventCallback<string> UserUpdated { get; set; }
+    [Parameter, EditorRequired] public EventCallback<UserProfile> UserUpdated { get; set; }
     [Parameter, EditorRequired] public EventCallback AccountDeleted { get; set; }
 
-    protected override void OnParametersSet() => name = User.Name;
+    protected override void OnParametersSet()
+    {
+        name = User.Name;
+        address = User.Address ?? string.Empty;
+    }
+
+    private void Open() => isOpen = true;
+    private void Close() { isOpen = false; error = null; deletionConfirmation = string.Empty; }
 
     private async Task SaveAsync()
     {
@@ -38,7 +83,7 @@
         }
 
         error = null;
-        await UserUpdated.InvokeAsync(normalizedName);
+        await UserUpdated.InvokeAsync(User with { Name = normalizedName, Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim() });
     }
 
     private async Task DeleteAsync()

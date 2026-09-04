@@ -1,0 +1,18 @@
+<main class="onboarding-page">
+    <section class="onboarding-card" aria-labelledby="verification-title">
+        <span class="eyebrow">UN PASO MÁS</span>
+        <h1 id="verification-title">Confirma tu correo para continuar</h1>
+        <p>Hemos iniciado sesión con <strong>@Email</strong>, pero Auth0 aún no ha confirmado su dirección.</p>
+        <ol class="verification-steps">
+            <li>Abre el correo de verificación enviado por Auth0.</li>
+            <li>Revisa también la carpeta de spam.</li>
+            <li>Vuelve a iniciar sesión cuando hayas confirmado el correo.</li>
+        </ol>
+        <a class="button" href="/auth/logout" data-enhance-nav="false">Ya he confirmado mi correo</a>
+        <p class="muted">Si no encuentras el mensaje, contacta con quien administra la cuenta de SmartPacking para reenviar la verificación desde Auth0.</p>
+    </section>
+</main>
+
+@code {
+    [Parameter] public string Email { get; set; } = "tu correo";
+}

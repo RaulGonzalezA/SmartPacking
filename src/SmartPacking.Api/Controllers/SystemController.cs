@@ -45,7 +45,16 @@ public sealed class SystemController(ISmartPackingStore store) : ControllerBase
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var updated = await store.UpdateUserProfileAsync(user.Id, name, cancellationToken);
+        var address = request.Address?.Trim();
+        if (address?.Length > 160)
+        {
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]>
+            {
+                ["address"] = ["La dirección o ciudad de salida no puede superar 160 caracteres."]
+            }));
+        }
+
+        var updated = await store.UpdateUserProfileAsync(user.Id, name, address, cancellationToken);
         return updated is null
             ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Usuario no encontrado")
             : Ok(updated);

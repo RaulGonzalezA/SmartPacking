@@ -23,6 +23,7 @@
     <ProjectReference Include="..\SmartPacking.Contracts\SmartPacking.Contracts.csproj" />
     <ProjectReference Include="..\SmartPacking.Infrastructure\SmartPacking.Infrastructure.csproj" />
     <ProjectReference Include="..\SmartPacking.Infrastructure.PostgreSql\SmartPacking.Infrastructure.PostgreSql.csproj" />
+    <ProjectReference Include="..\SmartPacking.Infrastructure.SqlServer\SmartPacking.Infrastructure.SqlServer.csproj" />
   </ItemGroup>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>

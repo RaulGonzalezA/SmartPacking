@@ -8,6 +8,25 @@ namespace SmartPacking.Application.Tests;
 public sealed class PackingRecommendationServiceTests
 {
     [Fact]
+    public void TransportAdvisorExplainsAirportTransferFromOcanaToRome()
+    {
+        var options = TransportAdvisor.GetOptions("Ocaña, Toledo", "Roma");
+
+        options.Should().Contain(option => option.Type == TransportType.Car && option.IsAvailable);
+        options.Should().Contain(option => option.Type == TransportType.Bus && option.IsAvailable);
+        options.Should().Contain(option => option.Type == TransportType.Plane && option.IsAvailable && option.Reason.Contains("Madrid-Barajas"));
+        options.Should().Contain(option => option.Type == TransportType.Train && !option.IsAvailable);
+    }
+
+    [Fact]
+    public void TransportAdvisorMarksTrainAsAvailableFromMedinaDelCampo()
+    {
+        var options = TransportAdvisor.GetOptions("Medina del Campo", "Madrid");
+
+        options.Should().Contain(option => option.Type == TransportType.Train && option.IsAvailable);
+    }
+
+    [Fact]
     public void AnalyzeWhenLuggageIsOverweightSuggestsALighterReplacement()
     {
         var profile = new FamilyProfile(Guid.NewGuid(), "Ana");

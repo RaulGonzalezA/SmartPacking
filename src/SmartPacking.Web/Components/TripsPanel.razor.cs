@@ -14,6 +14,8 @@ public partial class TripsPanel
     private readonly HashSet<Guid> tripProfileIds = [];
     private readonly HashSet<Guid> usedItemIds = [];
     private bool showTripForm;
+    private bool editCreatedTrip;
+    private bool showTravellerForm;
     private bool confirmTripDeletion;
     private Guid? confirmTravellerArchiveId;
     private Trip? editingTrip;
@@ -34,6 +36,7 @@ public partial class TripsPanel
     [Parameter] public IReadOnlyList<TripTemplate> Templates { get; set; } = [];
     [Parameter] public IReadOnlyList<FamilyProfile> TripProfiles { get; set; } = [];
     [Parameter] public IReadOnlyList<ClothingItem> Wardrobe { get; set; } = [];
+    [Parameter] public string? DefaultOrigin { get; set; }
     [Parameter] public Guid SelectedTripId { get; set; }
     [Parameter] public TripWeatherForecast? Weather { get; set; }
     [Parameter] public IReadOnlySet<Guid> UsageItemIds { get; set; } = new HashSet<Guid>();
@@ -52,8 +55,17 @@ public partial class TripsPanel
 
     protected override void OnParametersSet()
     {
+        if (string.IsNullOrWhiteSpace(newTrip.Origin))
+        {
+            newTrip.Origin = DefaultOrigin;
+        }
         if (synchronizedTripId != SelectedTripId) { synchronizedTripId = SelectedTripId; tripProfileIds.Clear(); tripProfileIds.UnionWith(TripProfiles.Select(profile => profile.Id)); }
         if (!ReferenceEquals(synchronizedUsageItemIds, UsedItemIds)) { synchronizedUsageItemIds = UsedItemIds; usedItemIds.Clear(); usedItemIds.UnionWith(UsedItemIds); }
+        if (editCreatedTrip && SelectedTripId != Guid.Empty && Trips.Any(trip => trip.Id == SelectedTripId))
+        {
+            editCreatedTrip = false;
+            StartEditingTrip();
+        }
     }
     private Task SelectTrip(ChangeEventArgs args) => SelectedTripChanged.InvokeAsync(Guid.TryParse(args.Value?.ToString(), out var id) ? id : Guid.Empty);
     private void ApplyTemplate()
@@ -71,6 +83,12 @@ public partial class TripsPanel
         primaryLuggage.ApplyDefaults();
         primaryLuggage.AllowanceGrams = template.DefaultLuggageAllowanceGrams;
     }
+    private async Task CreateTrip()
+    {
+        await Created.InvokeAsync(newTrip);
+        showTripForm = false;
+        editCreatedTrip = true;
+    }
     private void StartEditingTrip() { editingTrip = Trips.SingleOrDefault(trip => trip.Id == SelectedTripId); if (editingTrip is not null) editTrip.CopyFrom(editingTrip); }
     private void CancelEditingTrip() => editingTrip = null;
     private async Task SaveTrip()
@@ -86,8 +104,24 @@ public partial class TripsPanel
     private void SetTraveller(Guid id, bool selected) { if (selected) tripProfileIds.Add(id); else tripProfileIds.Remove(id); }
     private Task SaveTravellers() => TravellersSaved.InvokeAsync(tripProfileIds);
     private async Task AddTraveller() { if (!string.IsNullOrWhiteSpace(newTravellerName)) { await TravellerAdded.InvokeAsync(new(newTravellerName, newTravellerPackingNotes, newTravellerMedicalNotes)); newTravellerName = newTravellerPackingNotes = newTravellerMedicalNotes = string.Empty; } }
+    private string CurrentTravellerName { get => editingTraveller is null ? newTravellerName : editingTravellerName; set { if (editingTraveller is null) newTravellerName = value; else editingTravellerName = value; } }
+    private string CurrentTravellerPackingNotes { get => editingTraveller is null ? newTravellerPackingNotes : editingTravellerPackingNotes; set { if (editingTraveller is null) newTravellerPackingNotes = value; else editingTravellerPackingNotes = value; } }
+    private string CurrentTravellerMedicalNotes { get => editingTraveller is null ? newTravellerMedicalNotes : editingTravellerMedicalNotes; set { if (editingTraveller is null) newTravellerMedicalNotes = value; else editingTravellerMedicalNotes = value; } }
+    private void OpenTravellerForm() => showTravellerForm = true;
+    private async Task SaveTravellerDialog()
+    {
+        if (editingTraveller is null)
+        {
+            await AddTraveller();
+            showTravellerForm = false;
+            return;
+        }
+
+        await SaveTraveller();
+    }
     private void StartEditingTraveller(FamilyProfile profile) { editingTraveller = profile; editingTravellerName = profile.Name; editingTravellerPackingNotes = profile.PackingNotes ?? string.Empty; editingTravellerMedicalNotes = profile.MedicalNotes ?? string.Empty; }
     private void CancelEditingTraveller() { editingTraveller = null; editingTravellerName = editingTravellerPackingNotes = editingTravellerMedicalNotes = string.Empty; }
+    private void CancelTravellerDialog() { showTravellerForm = false; CancelEditingTraveller(); }
     private async Task SaveTraveller()
     {
         if (editingTraveller is null || string.IsNullOrWhiteSpace(editingTravellerName))
@@ -106,5 +140,6 @@ public partial class TripsPanel
     private async Task ConfirmTravellerArchiveAsync() { if (confirmTravellerArchiveId is Guid id) { confirmTravellerArchiveId = null; await Archived.InvokeAsync(id); } }
     private void CancelConfirmation() { confirmTripDeletion = false; confirmTravellerArchiveId = null; }
     private static string LuggageTypeName(LuggageType type) => type switch { LuggageType.Backpack => "Mochila", LuggageType.Cabin => "Cabina", _ => "Facturada" };
+    private static string TransportSummary(Trip trip) => trip.TransportTypesOrEmpty.Count == 0 ? "🚗 Transporte por decidir" : string.Join(" · ", trip.TransportTypesOrEmpty.Select(type => type switch { TransportType.Car => "🚗 Coche", TransportType.Plane => "✈️ Avión", TransportType.Train => "🚆 Tren", TransportType.Bus => "🚌 Autobús", _ => "🛳️ Barco" }));
     private static string ActivityName(TripActivity activity) => activity switch { TripActivity.Sightseeing => "Turismo", TripActivity.Beach => "Playa", TripActivity.Hiking => "Senderismo", TripActivity.Business => "Negocios", TripActivity.FormalEvent => "Evento formal", TripActivity.Sport => "Deporte", TripActivity.Nightlife => "Ocio nocturno", _ => "Relax" };
 }

@@ -30,6 +30,7 @@ public sealed class PanelRenderingTests : BunitContext
             .Add(component => component.User, new UserProfile(Guid.NewGuid(), "Lucía", true))
             .Add(component => component.AccountDeleted, EventCallback.Factory.Create(this, () => deleted = true)));
 
+        await cut.FindAll("button").Single(button => button.TextContent == "Mi cuenta").ClickAsync();
         cut.FindAll("button").Single(button => button.TextContent == "Eliminar mis datos").HasAttribute("disabled").Should().BeTrue();
         await cut.FindAll("input")[1].ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "ELIMINAR" });
         await cut.FindAll("button").Single(button => button.TextContent == "Eliminar mis datos").ClickAsync();
@@ -47,7 +48,7 @@ public sealed class PanelRenderingTests : BunitContext
             .Add(component => component.Profiles, new[] { profile })
             .Add(component => component.TravellerUpdated, EventCallback.Factory.Create<FamilyProfile>(this, value => saved = value)));
 
-        await cut.FindAll("button").Single(button => button.TextContent == "Editar").ClickAsync();
+        await cut.FindAll("button").Single(button => button.TextContent.StartsWith("Editar", StringComparison.Ordinal)).ClickAsync();
         await cut.FindAll("button").Single(button => button.TextContent == "Guardar viajero").ClickAsync();
 
         saved.Should().Be(profile);
@@ -98,7 +99,7 @@ public sealed class PanelRenderingTests : BunitContext
             .Add(component => component.IsActive, true));
 
         cut.Markup.Should().Contain("Crea un viaje para empezar a organizarlo.");
-        cut.FindAll("button[disabled]").Should().HaveCount(2);
+        cut.FindAll("button").Should().Contain(button => button.TextContent.Contains("Nuevo viaje", StringComparison.Ordinal));
     }
 
     [Fact]

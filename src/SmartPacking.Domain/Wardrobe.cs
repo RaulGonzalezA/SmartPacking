@@ -6,6 +6,45 @@ public enum Style { Casual, Formal, Sport }
 public enum TripActivity { Sightseeing, Beach, Hiking, Business, FormalEvent, Sport, Nightlife, Relaxation }
 public enum LuggageType { Backpack, Cabin, Checked }
 public enum TransportType { Car, Plane, Train, Bus, Cruise }
+public sealed record TransportOption(TransportType Type, bool IsAvailable, string Reason);
+
+public static class TransportAdvisor
+{
+    public static IReadOnlyList<TransportOption> GetOptions(string? origin, string destination)
+    {
+        var originPlace = Normalize(origin);
+        var destinationPlace = Normalize(destination);
+        var hasAirport = IsNearAirport(originPlace) && IsNearAirport(destinationPlace);
+        var hasTrain = HasRailStation(originPlace) && HasRailStation(destinationPlace);
+        var hasPort = HasPort(originPlace) && HasPort(destinationPlace);
+        return
+        [
+            new(TransportType.Car, true, "Disponible por carretera entre origen y destino."),
+            new(TransportType.Bus, true, "Puede requerir un transbordo; confirma horarios y paradas."),
+            new(TransportType.Plane, hasAirport, hasAirport ? $"Salida aérea posible desde {NearestAirport(originPlace)}." : "No se ha identificado un aeropuerto cercano en ambos extremos."),
+            new(TransportType.Train, hasTrain, hasTrain ? "Hay estación ferroviaria en origen y destino o su entorno." : "No se ha identificado conexión ferroviaria en ambos extremos."),
+            new(TransportType.Cruise, hasPort, hasPort ? "Hay puerto de pasajeros en origen y destino o su entorno." : "No se ha identificado puerto de pasajeros en ambos extremos.")
+        ];
+    }
+
+    private static string Normalize(string? place) => (place ?? string.Empty).Trim().ToUpperInvariant();
+    private static bool IsNearAirport(string place) => place.Contains("MADRID") || place.Contains("OCAÑA") || place.Contains("ROMA") || place.Contains("BARCELONA") || place.Contains("SEVILLA") || place.Contains("VALENCIA") || place.Contains("MALAGA");
+    private static bool HasRailStation(string place) => !place.Contains("OCAÑA") && (place.Contains("MEDINA DEL CAMPO") || place.Contains("MADRID") || place.Contains("ROMA") || place.Contains("BARCELONA") || place.Contains("SEVILLA") || place.Contains("VALENCIA"));
+    private static bool HasPort(string place) => place.Contains("ROMA") || place.Contains("BARCELONA") || place.Contains("VALENCIA") || place.Contains("MALAGA") || place.Contains("PALMA");
+    private static string NearestAirport(string place)
+    {
+        if (place.Contains("OCAÑA"))
+        {
+            return "Madrid-Barajas (con traslado desde Ocaña)";
+        }
+
+        if (place.Contains("ROMA"))
+        {
+            return "Roma Fiumicino/Ciampino";
+        }
+        return place;
+    }
+}
 public sealed record TripLuggage(
     Guid Id,
     LuggageType Type,
@@ -59,7 +98,7 @@ public sealed record ClothingItem(
     Guid? OwnerProfileId = null,
     string? PhotoUrl = null);
 
-public sealed record UserProfile(Guid Id, string Name, bool IsOnboarded);
+public sealed record UserProfile(Guid Id, string Name, bool IsOnboarded, string? Address = null);
 public sealed record FamilyProfile(Guid Id, string Name, bool IsArchived = false, string? PackingNotes = null, string? MedicalNotes = null);
 
 public sealed record PackingList(Guid Id, Guid TripId, Guid UserId, DateTimeOffset CreatedAt, IReadOnlyCollection<PackingListItem> Items);
@@ -87,7 +126,8 @@ public sealed record Trip(
     IReadOnlyCollection<TripDayPlan>? DayPlans = null,
     string? AirlineCode = null,
     IReadOnlyCollection<TransportType>? TransportTypes = null,
-    IReadOnlyCollection<TripLuggage>? Luggages = null)
+    IReadOnlyCollection<TripLuggage>? Luggages = null,
+    string? Origin = null)
 {
     public int Days => EndDate.DayNumber - StartDate.DayNumber + 1;
     public TripStatus GetStatus(DateOnly today)

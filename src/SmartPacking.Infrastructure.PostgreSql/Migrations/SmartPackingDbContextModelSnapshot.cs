@@ -307,6 +307,9 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                     b.Property<int>("MinimumTemperatureCelsius")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Origin")
+                        .HasColumnType("text");
+
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
 
@@ -373,6 +376,9 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Address")
+                        .HasColumnType("text");
 
                     b.Property<string>("ExternalIssuer")
                         .HasColumnType("text");

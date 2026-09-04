@@ -10,7 +10,9 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using SmartPacking.Api.DependencyInjection;
 using SmartPacking.Application;
 using SmartPacking.Api.Contracts;
 using SmartPacking.Contracts;
@@ -159,9 +161,11 @@ public sealed class WardrobeApiTests : IAsyncLifetime
     public async Task UserCanUpdateAndPermanentlyDeleteTheirLocalData()
     {
         var currentUser = await client.GetFromJsonAsync<UserProfile>("/api/me");
-        var update = await client.PutAsJsonAsync("/api/me", new { name = "María" });
+        var update = await client.PutAsJsonAsync("/api/me", new { name = "María", address = "Ocaña, Toledo" });
         update.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await update.Content.ReadFromJsonAsync<UserProfile>())!.Name.Should().Be("María");
+        var updatedUser = await update.Content.ReadFromJsonAsync<UserProfile>();
+        updatedUser!.Name.Should().Be("María");
+        updatedUser.Address.Should().Be("Ocaña, Toledo");
 
         (await client.PostAsJsonAsync("/api/wardrobe", new UpsertClothingItemRequest("Abrigo", ClothingType.Jacket, Season.Winter, "Gris", 7, true, Style.Casual, 600, true, true, 70, [], null))).EnsureSuccessStatusCode();
         (await client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, "/api/me") { Content = JsonContent.Create(new { confirmation = "ELIMINAR" }) })).StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -171,6 +175,26 @@ public sealed class WardrobeApiTests : IAsyncLifetime
         recreatedUser!.Id.Should().NotBe(currentUser!.Id);
         recreatedUser.IsOnboarded.Should().BeFalse();
         (await client.GetFromJsonAsync<ApiResult<ClothingItemResponse[]>>("/api/wardrobe"))!.Data.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AzureSqlConfigurationUsesTheSqlServerProvider()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Persistence:Provider"] = "SqlServer",
+                ["ConnectionStrings:SmartPacking"] = "Server=tcp:smartpacking.database.windows.net,1433;Initial Catalog=smartpacking;Encrypt=True"
+            })
+            .Build();
+        var services = new ServiceCollection();
+
+        services.AddSmartPackingPersistence(configuration);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<SmartPackingDbContext>();
+
+        database.Database.ProviderName.Should().Be("Microsoft.EntityFrameworkCore.SqlServer");
     }
 
     public async Task DisposeAsync()

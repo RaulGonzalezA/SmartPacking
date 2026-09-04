@@ -1,0 +1,83 @@
+@implements IDisposable
+@inject IWebSmartPackingClient Api
+
+@if (isLoading)
+{
+    <div class="city-suggestions" role="status">Buscando ciudades…</div>
+}
+else if (matches.Count > 0)
+{
+    <div class="city-suggestions" role="listbox" aria-label="Ciudades sugeridas">
+        @foreach (var displayName in matches.Select(city => city.DisplayName))
+        {
+            <button type="button" role="option" @onmousedown:preventDefault="true" @onclick="() => Selected.InvokeAsync(displayName)">@displayName</button>
+        }
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(Query) && Query.Trim().Length >= 3)
+{
+    <div class="city-suggestions city-suggestions-empty" role="status">No encontramos ciudades con “@Query”. Prueba con más letras o escribe la localidad completa.</div>
+}
+
+@code {
+    private readonly CancellationTokenSource lifetimeCancellation = new();
+    private IReadOnlyList<CitySuggestion> matches = [];
+    private string? searchedQuery;
+    private bool isLoading;
+
+    [Parameter] public string? Query { get; set; }
+    [Parameter, EditorRequired] public EventCallback<string> Selected { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var normalizedQuery = Query?.Trim() ?? string.Empty;
+        if (normalizedQuery.Length < 3)
+        {
+            matches = [];
+            searchedQuery = normalizedQuery;
+            isLoading = false;
+            return;
+        }
+
+        if (string.Equals(searchedQuery, normalizedQuery, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        searchedQuery = normalizedQuery;
+        isLoading = true;
+        try
+        {
+            matches = await Api.SearchCitiesAsync(normalizedQuery, lifetimeCancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            matches = [];
+        }
+        catch (Exception)
+        {
+            matches = FindFallbackCities(normalizedQuery);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        lifetimeCancellation.Cancel();
+        lifetimeCancellation.Dispose();
+    }
+
+    private static IReadOnlyList<CitySuggestion> FindFallbackCities(string query)
+    {
+        var cities = new[]
+        {
+            new CitySuggestion("Toledo", "España", "Castilla-La Mancha"), new CitySuggestion("Tolosa", "España", "Gipuzkoa"), new CitySuggestion("Toluca", "México", "Estado de México"),
+            new CitySuggestion("Madrid", "España", "Comunidad de Madrid"), new CitySuggestion("Madridejos", "España", "Castilla-La Mancha"), new CitySuggestion("Madras", "India", "Tamil Nadu"),
+            new CitySuggestion("Washington, D.C.", "Estados Unidos", null), new CitySuggestion("Londres", "Reino Unido", "Inglaterra"), new CitySuggestion("Londrina", "Brasil", "Paraná")
+        };
+        return cities.Where(city => city.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+    }
+}

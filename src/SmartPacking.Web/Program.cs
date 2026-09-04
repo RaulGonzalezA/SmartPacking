@@ -47,17 +47,6 @@ if (authenticationEnabled)
 
             return Task.CompletedTask;
         };
-        options.Events.OnTicketReceived = async context =>
-        {
-            var emailVerified = context.Principal?.FindFirst("email_verified")?.Value
-                ?? context.Principal?.FindFirst("https://smartpacking.app/email_verified")?.Value;
-            if (!bool.TryParse(emailVerified, out var isEmailVerified) || !isEmailVerified)
-            {
-                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                context.Response.Redirect("/login?error=email_not_verified");
-                context.HandleResponse();
-            }
-        };
     });
     builder.Services.AddAuthorization();
 }

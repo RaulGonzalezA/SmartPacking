@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using SmartPacking.Application;
 
 namespace SmartPacking.Infrastructure;
 
@@ -11,6 +12,31 @@ public sealed record WeatherForecast(string Destination, decimal MinimumCelsius,
 
 public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDistributedCache cache, ILogger<OpenMeteoWeatherProvider> logger)
 {
+    public async Task<IReadOnlyList<CitySuggestion>> SearchCitiesAsync(string query, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 3)
+        {
+            return [];
+        }
+
+        try
+        {
+            using var searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            searchCancellation.CancelAfter(TimeSpan.FromSeconds(2));
+            var response = await httpClient.GetFromJsonAsync<GeocodingResponse>($"https://geocoding-api.open-meteo.com/v1/search?name={Uri.EscapeDataString(query.Trim())}&count=10&language=es&format=json", searchCancellation.Token);
+            var results = response?.Results?.Select(result => new CitySuggestion(result.Name ?? string.Empty, result.Country, result.Admin1)).Where(result => !string.IsNullOrWhiteSpace(result.Name)).ToArray() ?? [];
+            return results.Length > 0 ? results : FindFallbackCities(query);
+        }
+        catch (HttpRequestException exception)
+        {
+            LogNoResponse(logger, exception, query);
+            return FindFallbackCities(query);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return FindFallbackCities(query);
+        }
+    }
     public async Task<WeatherForecast?> GetAsync(string destination, DateOnly start, DateOnly end, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(destination) || end < start)
@@ -90,7 +116,7 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
     private static partial void LogInvalidResponse(ILogger logger, Exception exception, string destination);
 
     private sealed record GeocodingResponse(GeocodingResult[]? Results);
-    private sealed record GeocodingResult(decimal Latitude, decimal Longitude);
+    private sealed record GeocodingResult(decimal Latitude, decimal Longitude, string? Name = null, string? Country = null, string? Admin1 = null);
     private sealed record ForecastResponse(DailyForecast? Daily);
     private sealed record DailyForecast(
         [property: JsonPropertyName("time")] string[]? Dates,
@@ -101,4 +127,16 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
         [property: JsonPropertyName("precipitation_probability_max")] int[]? RainProbability,
         [property: JsonPropertyName("weather_code")] int[]? WeatherCode,
         [property: JsonPropertyName("wind_speed_10m_max")] decimal[]? WindSpeed);
+
+    private static CitySuggestion[] FindFallbackCities(string query)
+    {
+        var cities = new[]
+        {
+            new CitySuggestion("Toledo", "España", "Castilla-La Mancha"), new CitySuggestion("Tolosa", "España", "Gipuzkoa"), new CitySuggestion("Toluca", "México", "Estado de México"),
+            new CitySuggestion("Madrid", "España", "Comunidad de Madrid"), new CitySuggestion("Madridejos", "España", "Castilla-La Mancha"), new CitySuggestion("Madras", "India", "Tamil Nadu"),
+            new CitySuggestion("Washington, D.C.", "Estados Unidos", null), new CitySuggestion("Londres", "Reino Unido", "Inglaterra"), new CitySuggestion("Londrina", "Brasil", "Paraná"),
+            new CitySuggestion("Barcelona", "España", "Cataluña"), new CitySuggestion("Valencia", "España", "Comunidad Valenciana"), new CitySuggestion("Roma", "Italia", "Lacio"), new CitySuggestion("París", "Francia", "Isla de Francia")
+        };
+        return cities.Where(city => city.DisplayName.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase)).Take(10).ToArray();
+    }
 }

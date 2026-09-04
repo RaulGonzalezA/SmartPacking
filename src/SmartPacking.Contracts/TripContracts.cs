@@ -18,7 +18,8 @@ public sealed record TripResponse(
     IReadOnlyCollection<TripDayPlanContract>? DayPlans = null,
     string? AirlineCode = null,
     IReadOnlyCollection<int>? TransportTypes = null,
-    IReadOnlyCollection<TripLuggageContract>? Luggages = null);
+    IReadOnlyCollection<TripLuggageContract>? Luggages = null,
+    string? Origin = null);
 
 public sealed record SaveTripRequest(
     string Destination,
@@ -37,7 +38,8 @@ public sealed record SaveTripRequest(
     IReadOnlyCollection<TripDayPlanContract>? DayPlans = null,
     string? AirlineCode = null,
     IReadOnlyCollection<int>? TransportTypes = null,
-    IReadOnlyCollection<TripLuggageContract>? Luggages = null);
+    IReadOnlyCollection<TripLuggageContract>? Luggages = null,
+    string? Origin = null);
 
 public sealed record TripDayPlanContract(DateOnly Date, IReadOnlyCollection<int> Activities);
 public sealed record TripLuggageContract(Guid Id, int Type, int AllowanceGrams, int HeightCentimetres, int WidthCentimetres, int DepthCentimetres, string? Name = null);

@@ -56,6 +56,7 @@ public sealed class UserEntity
     public string? ExternalIssuer { get; set; }
     public string? ExternalSubject { get; set; }
     public bool IsOnboarded { get; set; }
+    public string? Address { get; set; }
 }
 public sealed class UserAuditEventEntity
 {
@@ -105,6 +106,7 @@ public sealed class TripEntity
     public string? AirlineCode { get; set; }
     public string TransportTypes { get; set; } = "[]";
     public string Luggages { get; set; } = "[]";
+    public string? Origin { get; set; }
 }
 public sealed class PackingListEntity { public Guid Id { get; set; } public Guid TripId { get; set; } public Guid UserId { get; set; } public DateTimeOffset CreatedAt { get; set; } }
 public sealed class PackingListItemEntity { public Guid PackingListId { get; set; } public Guid ClothingItemId { get; set; } public bool IsPacked { get; set; } }

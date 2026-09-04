@@ -5,6 +5,7 @@ namespace SmartPacking.Web.Components;
 public sealed class TripFormInput
 {
     public string Destination { get; set; } = string.Empty;
+    public string? Origin { get; set; }
     public DateOnly StartDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
     public DateOnly EndDate { get; set; } = DateOnly.FromDateTime(DateTime.Today.AddDays(3));
     public int MinimumTemperatureCelsius { get; set; } = 18;
@@ -24,6 +25,7 @@ public sealed class TripFormInput
     public void CopyFrom(Trip trip)
     {
         Destination = trip.Destination;
+        Origin = trip.Origin;
         StartDate = trip.StartDate;
         EndDate = trip.EndDate;
         MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius;
@@ -119,7 +121,7 @@ public sealed class TripFormInput
     public Trip ToTrip(Guid id)
     {
         var primary = Luggages[0];
-        return new(id, Destination, StartDate, EndDate, MinimumTemperatureCelsius, MaximumTemperatureCelsius, [Style.Casual], TemplateKey, primary.AllowanceGrams, primary.Type == LuggageType.Cabin, primary.Type, primary.HeightCentimetres, primary.WidthCentimetres, primary.DepthCentimetres, DayPlans.Select(plan => new TripDayPlan(plan.Date, plan.Activities.ToArray())).ToArray(), AirlineCode, TransportTypes.ToArray(), Luggages.Select(luggage => luggage.ToDomain()).ToArray());
+        return new(id, Destination, StartDate, EndDate, MinimumTemperatureCelsius, MaximumTemperatureCelsius, [Style.Casual], TemplateKey, primary.AllowanceGrams, primary.Type == LuggageType.Cabin, primary.Type, primary.HeightCentimetres, primary.WidthCentimetres, primary.DepthCentimetres, DayPlans.Select(plan => new TripDayPlan(plan.Date, plan.Activities.ToArray())).ToArray(), AirlineCode, TransportTypes.ToArray(), Luggages.Select(luggage => luggage.ToDomain()).ToArray(), Origin?.Trim());
     }
 }
 

@@ -1,23 +1,21 @@
-<main>
-    <header class="app-heading">
-        <div>
-            <p class="eyebrow">TU ARMARIO · TU VIAJE · TU MALETA</p>
-            <h1>Maleta Inteligente</h1>
-        </div>
+<main class="app-shell">
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="Maleta Inteligente, inicio"><span aria-hidden="true">🧳</span><strong>Maleta Inteligente</strong></a>
+        <nav class="tabs primary-nav" aria-label="Secciones">
+            @foreach (var tab in Tabs)
+            {
+                <button class="tab @(ActiveTab == tab.Key ? "active" : "")" disabled="@IsBusy" @onclick="() => ActiveTabChanged.InvokeAsync(tab.Key)">@tab.Value</button>
+            }
+        </nav>
         <div class="account-actions">
             @if (User is not null)
             {
-                <AccountPanel User="User" IsBusy="IsBusy" UserUpdated="UserUpdated" AccountDeleted="AccountDeleted" />
+                <span class="user-name">@User.Name</span>
+                <AccountPanel User="User" Email="Email" IsEmailVerified="IsEmailVerified" IsBusy="IsBusy" UserUpdated="UserUpdated" AccountDeleted="AccountDeleted" />
             }
             <a class="logout-link" href="/auth/logout" data-enhance-nav="false">Cerrar sesión</a>
         </div>
     </header>
-    <nav class="tabs" aria-label="Secciones">
-        @foreach (var tab in Tabs)
-        {
-            <button class="tab @(ActiveTab == tab.Key ? "active" : "")" disabled="@IsBusy" @onclick="() => ActiveTabChanged.InvokeAsync(tab.Key)">@tab.Value</button>
-        }
-    </nav>
     @if (!string.IsNullOrWhiteSpace(Feedback))
     {
         <p class="feedback">@Feedback</p>
@@ -43,7 +41,9 @@
     [Parameter] public bool IsLoading { get; set; }
     [Parameter] public bool IsBusy { get; set; }
     [Parameter] public UserProfile? User { get; set; }
-    [Parameter] public EventCallback<string> UserUpdated { get; set; }
+    [Parameter] public string? Email { get; set; }
+    [Parameter] public bool IsEmailVerified { get; set; }
+    [Parameter] public EventCallback<UserProfile> UserUpdated { get; set; }
     [Parameter] public EventCallback AccountDeleted { get; set; }
     [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
 }

@@ -48,9 +48,13 @@ La API rechaza tokens cuyo correo no esté verificado. Como los access tokens de
 
 ```javascript
 exports.onExecutePostLogin = async (event, api) => {
+  const emailVerified = event.user.email_verified === true;
   api.accessToken.setCustomClaim(
     "https://smartpacking.app/email_verified",
-    event.user.email_verified === true);
+    emailVerified);
+  api.idToken.setCustomClaim(
+    "https://smartpacking.app/email_verified",
+    emailVerified);
 };
 ```
 
