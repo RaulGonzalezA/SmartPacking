@@ -36,6 +36,8 @@ if (authenticationEnabled)
         options.Scope.Add("profile");
         options.Scope.Add("email");
         options.ClaimActions.MapUniqueJsonKey("email_verified", "email_verified");
+        options.ClaimActions.MapJsonKey("permissions", "permissions");
+        options.ClaimActions.MapJsonKey("permissions", "https://smartpacking.app/permissions");
         options.Events.OnRedirectToIdentityProvider = context =>
         {
             context.ProtocolMessage.SetParameter("audience", audience);

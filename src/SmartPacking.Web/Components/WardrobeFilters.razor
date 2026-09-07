@@ -1,0 +1,21 @@
+@using SmartPacking.Domain
+
+<div class="wardrobe-toolbar">
+    <label class="search-field"><span aria-hidden="true">⌕</span><input placeholder="Buscar prendas" value="@Search" @oninput="OnSearchChanged" /></label>
+    <div class="filter-chips" aria-label="Filtrar por tipo">
+        <button class="@(SelectedType is null ? "active" : string.Empty)" @onclick="() => SelectedTypeChanged.InvokeAsync(null)">Todo</button>
+        @foreach (var type in Enum.GetValues<ClothingType>())
+        {
+            <button class="@(SelectedType == type ? "active" : string.Empty)" @onclick="() => SelectedTypeChanged.InvokeAsync(type)">@TypeName(type)</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Search { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> SearchChanged { get; set; }
+    [Parameter] public ClothingType? SelectedType { get; set; }
+    [Parameter] public EventCallback<ClothingType?> SelectedTypeChanged { get; set; }
+    private Task OnSearchChanged(ChangeEventArgs args) => SearchChanged.InvokeAsync(args.Value?.ToString() ?? string.Empty);
+    private static string TypeName(ClothingType type) => type.ToString();
+}

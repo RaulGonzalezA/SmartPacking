@@ -57,6 +57,7 @@ public sealed class WardrobeApiTests : IAsyncLifetime
     private SqliteConnection databaseConnection = null!;
     private WebApplicationFactory<Program> factory = null!;
     private HttpClient client = null!;
+    private TestGarmentRecognizer recognizer = null!;
 
     public async Task InitializeAsync()
     {
@@ -73,9 +74,59 @@ public sealed class WardrobeApiTests : IAsyncLifetime
                 services.AddDbContext<SmartPackingDbContext>(options => options.UseSqlite(databaseConnection));
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
                 services.AddScoped<IExternalIdentityAccessor, TestExternalIdentityAccessor>();
+                services.RemoveAll<IGarmentRecognizer>();
+                services.AddSingleton<TestGarmentRecognizer>();
+                services.AddSingleton<IGarmentRecognizer>(provider => provider.GetRequiredService<TestGarmentRecognizer>());
             });
         });
         client = factory.CreateClient();
+        recognizer = factory.Services.GetRequiredService<TestGarmentRecognizer>();
+    }
+
+    [Fact]
+    public async Task ValidGarmentPhotoReturnsTheProposalFromTheRecognizer()
+    {
+        using var form = CreatePhotoForm("photo.jpg", "image/jpeg");
+
+        var response = await client.PostAsync("/api/wardrobe/recognition", form);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var proposal = await response.Content.ReadFromJsonAsync<GarmentRecognitionSuggestion>();
+        proposal!.Category.Should().Be("Jersey");
+        recognizer.Calls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task InvalidGarmentPhotoIsRejectedWithoutCallingTheRecognizer()
+    {
+        using var form = CreatePhotoForm("photo.png", "image/png");
+
+        var response = await client.PostAsync("/api/wardrobe/recognition", form);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        recognizer.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task UnavailableRecognizerReturnsAServiceUnavailableProblem()
+    {
+        recognizer.Exception = new HttpRequestException("Gemini no disponible");
+        using var form = CreatePhotoForm("photo.jpg", "image/jpeg");
+
+        var response = await client.PostAsync("/api/wardrobe/recognition", form);
+
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+    }
+
+    [Fact]
+    public async Task RecognitionProposalDoesNotPersistAClothingItemUntilTheUserConfirmsIt()
+    {
+        using var form = CreatePhotoForm("photo.jpg", "image/jpeg");
+        (await client.PostAsync("/api/wardrobe/recognition", form)).EnsureSuccessStatusCode();
+
+        var wardrobe = await client.GetFromJsonAsync<ApiResult<ClothingItemResponse[]>>("/api/wardrobe");
+
+        wardrobe!.Data.Should().BeEmpty("la propuesta solo rellena el editor y requiere guardar manualmente");
     }
 
     [Fact]
@@ -229,6 +280,32 @@ public sealed class WardrobeApiTests : IAsyncLifetime
         client.Dispose();
         await factory.DisposeAsync();
         await databaseConnection.DisposeAsync();
+    }
+
+    private static MultipartFormDataContent CreatePhotoForm(string fileName, string contentType)
+    {
+        var form = new MultipartFormDataContent();
+        var photo = new ByteArrayContent([0xFF, 0xD8, 0xFF, 0xD9]);
+        photo.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(photo, "photo", fileName);
+        return form;
+    }
+
+    private sealed class TestGarmentRecognizer : IGarmentRecognizer
+    {
+        public int Calls { get; private set; }
+        public Exception? Exception { get; set; }
+
+        public Task<GarmentRecognitionSuggestion> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken)
+        {
+            Calls++;
+            if (Exception is not null)
+            {
+                throw Exception;
+            }
+
+            return Task.FromResult(new GarmentRecognitionSuggestion("Jersey", "Verde", "Lana", ["Otoño", "Invierno"], "Casual", 350, ["Turismo"]));
+        }
     }
 
     private sealed class TestExternalIdentityAccessor(IHttpContextAccessor httpContextAccessor) : IExternalIdentityAccessor

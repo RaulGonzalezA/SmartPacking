@@ -13,6 +13,22 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
         await httpClient.GetFromJsonAsync<UserProfile>("api/me", cancellationToken)
         ?? throw new InvalidOperationException("La API no devolvió el usuario actual.");
 
+    public async Task<GarmentRecognitionUsageResult> GetAiUsageAsync(CancellationToken cancellationToken) =>
+        await httpClient.GetFromJsonAsync<GarmentRecognitionUsageResult>("api/me/ai-usage", cancellationToken)
+        ?? throw new InvalidOperationException("La API no devolvió el consumo de IA.");
+
+    public async Task<IReadOnlyList<AdminUserSummary>> GetAdminUsersAsync(CancellationToken cancellationToken) =>
+        await httpClient.GetFromJsonAsync<AdminUserSummary[]>("api/admin/users", cancellationToken) ?? [];
+
+    public async Task SetAdminPlanAsync(Guid userId, string plan, CancellationToken cancellationToken) =>
+        await EnsureSuccessAsync(await httpClient.PutAsJsonAsync($"api/admin/users/{userId}/plan", new { plan }, cancellationToken));
+
+    public async Task AddAdminCreditsAsync(Guid userId, int credits, CancellationToken cancellationToken) =>
+        await EnsureSuccessAsync(await httpClient.PostAsJsonAsync($"api/admin/users/{userId}/credits", new { credits }, cancellationToken));
+
+    public async Task<IReadOnlyList<AdminAuditEntry>> GetAdminAuditAsync(CancellationToken cancellationToken) =>
+        await httpClient.GetFromJsonAsync<AdminAuditEntry[]>("api/admin/audit", cancellationToken) ?? [];
+
     public async Task<UserProfile> CompleteOnboardingAsync(string name, CancellationToken cancellationToken)
     {
         var response = await httpClient.PostAsJsonAsync("api/me/onboarding", new { name }, cancellationToken);

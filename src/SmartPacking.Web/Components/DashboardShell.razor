@@ -2,7 +2,7 @@
     <header class="topbar">
         <a class="brand" href="/" aria-label="Maleta Inteligente, inicio"><span aria-hidden="true">🧳</span><strong>Maleta Inteligente</strong></a>
         <nav class="tabs primary-nav" aria-label="Secciones">
-            @foreach (var tab in Tabs)
+            @foreach (var tab in GetTabs())
             {
                 <button class="tab @(ActiveTab == tab.Key ? "active" : "")" disabled="@IsBusy" @onclick="() => ActiveTabChanged.InvokeAsync(tab.Key)">@tab.Value</button>
             }
@@ -35,11 +35,16 @@
         ["packing"] = "Maleta"
     };
 
+    private IReadOnlyDictionary<string, string> GetTabs() => ShowAdmin
+        ? new Dictionary<string, string>(Tabs) { ["admin"] = "Administración" }
+        : Tabs;
+
     [Parameter, EditorRequired] public string ActiveTab { get; set; } = "trips";
     [Parameter, EditorRequired] public EventCallback<string> ActiveTabChanged { get; set; }
     [Parameter] public string? Feedback { get; set; }
     [Parameter] public bool IsLoading { get; set; }
     [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public bool ShowAdmin { get; set; }
     [Parameter] public UserProfile? User { get; set; }
     [Parameter] public string? Email { get; set; }
     [Parameter] public bool IsEmailVerified { get; set; }

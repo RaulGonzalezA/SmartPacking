@@ -7,6 +7,11 @@ public interface IWebSmartPackingClient
 {
     Task<IReadOnlyList<CitySuggestion>> SearchCitiesAsync(string query, CancellationToken cancellationToken);
     Task<UserProfile> GetCurrentUserAsync(CancellationToken cancellationToken);
+    Task<GarmentRecognitionUsageResult> GetAiUsageAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<AdminUserSummary>> GetAdminUsersAsync(CancellationToken cancellationToken);
+    Task SetAdminPlanAsync(Guid userId, string plan, CancellationToken cancellationToken);
+    Task AddAdminCreditsAsync(Guid userId, int credits, CancellationToken cancellationToken);
+    Task<IReadOnlyList<AdminAuditEntry>> GetAdminAuditAsync(CancellationToken cancellationToken);
     Task<UserProfile> CompleteOnboardingAsync(string name, CancellationToken cancellationToken);
     Task<UserProfile> UpdateCurrentUserAsync(string name, UserAddress? address, CancellationToken cancellationToken);
     Task DeleteCurrentUserAsync(string confirmation, CancellationToken cancellationToken);

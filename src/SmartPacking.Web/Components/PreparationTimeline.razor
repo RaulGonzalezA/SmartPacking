@@ -1,0 +1,36 @@
+@using SmartPacking.Application
+@using SmartPacking.Domain
+
+@if (Plan is not null)
+{
+    <section class="family-section preparation-timeline">
+        <h2>Calendario de preparación</h2>
+        <p class="muted">Organiza lo importante antes de salir.</p>
+        <div class="cards">
+            @foreach (var task in Tasks())
+            {
+                <article class="card"><div><p class="type">@task.Date.ToString("dddd d MMMM")</p><h3>@task.Title</h3><p class="reason">@task.Description</p></div></article>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public TripPackingPlan? Plan { get; set; }
+    [Parameter] public IReadOnlyList<ChecklistItem> Checklist { get; set; } = [];
+
+    private IEnumerable<(DateOnly Date, string Title, string Description)> Tasks()
+    {
+        if (Plan is null) return [];
+        var trip = Plan.Trip;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var tasks = new List<(DateOnly, string, string)>();
+        if (Plan.Items.Any(item => !item.Recommendation.Item.IsClean)) tasks.Add((trip.StartDate.AddDays(-4), "Lavar prendas", "Deja listas las prendas que vas a llevar."));
+        if (Plan.MissingItems is { Count: > 0 }) tasks.Add((trip.StartDate.AddDays(-7), "Comprar faltantes", "Revisa los artículos que no tienes disponibles."));
+        if (Checklist.Any(item => item.Category == ChecklistCategory.Toiletries && !item.IsPacked)) tasks.Add((trip.StartDate.AddDays(-2), "Preparar líquidos y bolsa de aseo", "Comprueba límites de cabina y medicamentos."));
+        tasks.Add((trip.StartDate.AddDays(-2), "Revisar documentación", "DNI o pasaporte, reservas y seguro de viaje."));
+        tasks.Add((trip.StartDate.AddDays(-1), "Hacer check-in", "Confirma horarios, asientos y equipaje permitido."));
+        tasks.Add((trip.StartDate, "Salida", "Revisa la maleta, documentos y transporte al punto de salida."));
+        return tasks.Where(task => task.Item1 >= today).OrderBy(task => task.Item1).Select(task => (task.Item1, task.Item2, task.Item3));
+    }
+}

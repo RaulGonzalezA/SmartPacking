@@ -140,4 +140,30 @@ public sealed class PackingRecommendationServiceTests
 
         result.Items.First(item => item.Item.Type == ClothingType.Trousers).Item.Style.Should().Be(Style.Formal);
     }
+
+    [Fact]
+    public void RecommendTreatsDailyEssentialsAndSwimwearAsGarments()
+    {
+        var trip = DemoData.RomeTrip with { EndDate = DemoData.RomeTrip.StartDate.AddDays(4), Activities = [Style.Sport] };
+        var underwear = new ClothingItem(Guid.NewGuid(), "Ropa interior", ClothingType.Underwear, Season.AllYear, "Blanco", 1, false, Style.Casual, 70, true, true, 50, []);
+        var socks = new ClothingItem(Guid.NewGuid(), "Calcetines", ClothingType.Socks, Season.AllYear, "Blanco", 1, false, Style.Casual, 50, true, true, 50, []);
+        var swimwear = new ClothingItem(Guid.NewGuid(), "Bañador", ClothingType.Swimwear, Season.Summer, "Azul", 1, false, Style.Sport, 120, true, true, 50, []);
+
+        var result = PackingRecommendationService.Recommend(trip, DemoData.Wardrobe.Append(underwear).Append(socks).Append(swimwear));
+
+        result.Items.Select(item => item.Item.Type).Should().Contain([ClothingType.Underwear, ClothingType.Socks, ClothingType.Swimwear]);
+        result.Items.Where(item => item.Item.Type is ClothingType.Underwear or ClothingType.Socks).Should().OnlyContain(item => item.Reasons.Contains("prenda esencial diaria para la duración del viaje"));
+    }
+
+    [Fact]
+    public void RecommendAddsSweaterAndCoatForColdForecast()
+    {
+        var sweater = new ClothingItem(Guid.NewGuid(), "Jersey", ClothingType.Sweater, Season.Winter, "Gris", 6, false, Style.Casual, 450, true, true, 50, []);
+        var coat = new ClothingItem(Guid.NewGuid(), "Abrigo", ClothingType.Coat, Season.Winter, "Negro", 9, false, Style.Casual, 1100, true, true, 50, []);
+        var forecast = new TripWeatherForecast("Roma", 5, 12, 20, DemoData.RomeTrip.StartDate, DemoData.RomeTrip.EndDate, []);
+
+        var result = PackingRecommendationService.Recommend(DemoData.RomeTrip, DemoData.Wardrobe.Append(sweater).Append(coat), forecast);
+
+        result.Items.Select(item => item.Item.Type).Should().Contain([ClothingType.Sweater, ClothingType.Coat]);
+    }
 }

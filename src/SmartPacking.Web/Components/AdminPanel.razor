@@ -1,0 +1,61 @@
+@using SmartPacking.Application
+@inject IWebSmartPackingClient Api
+
+@if (IsActive)
+{
+    <section class="family-section">
+        <header class="page-section-header"><div><p class="type">Administración</p><h1>Usuarios y suscripciones</h1></div><button @onclick="LoadAsync">Actualizar</button></header>
+        @if (!string.IsNullOrWhiteSpace(error)) { <p class="feedback error">@error</p> }
+        @if (users is not null)
+        {
+            <div class="cards">@foreach (var user in users) { <article class="card"><div><h3>@(string.IsNullOrWhiteSpace(user.Name) ? "Sin onboarding" : user.Name)</h3><p class="muted">@user.AiPlan · @user.AiRecognitionCredits créditos · @(user.IsOnboarded ? "Activo" : "Pendiente")</p></div><div class="quick-form">@if (CanManagePlans) { <button class="secondary" @onclick="() => SetPlanAsync(user.Id, TargetPlan(user.AiPlan))">Cambiar a @TargetPlan(user.AiPlan)</button> } @if (CanManageCredits) { <button class="secondary" @onclick="() => AddCreditsAsync(user.Id)">+10 créditos</button> }</div></article> }</div>
+        }
+    </section>
+    @if (CanViewAudit)
+    {
+        <section class="family-section"><h2>Auditoría reciente</h2>@if (audit is not null) { <div class="cards">@foreach (var item in audit) { <article class="card"><p>@item.Action</p><small>@item.OccurredAt.LocalDateTime.ToString("g") · @item.UserId</small></article> }</div> }</section>
+    }
+    @if (CanViewBilling) { <section class="family-section"><h2>Facturación</h2><p class="muted">La integración de facturación está preparada en la API y se conectará al proveedor de pagos.</p></section> }
+}
+
+@code {
+    private IReadOnlyList<AdminUserSummary>? users;
+    private IReadOnlyList<AdminAuditEntry>? audit;
+    private string? error;
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public bool CanManageUsers { get; set; }
+    [Parameter] public bool CanManagePlans { get; set; }
+    [Parameter] public bool CanManageCredits { get; set; }
+    [Parameter] public bool CanViewAudit { get; set; }
+    [Parameter] public bool CanViewBilling { get; set; }
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsActive && users is null)
+        {
+            await LoadAsync();
+        }
+    }
+    private async Task LoadAsync()
+    {
+        try
+        {
+            error = null;
+            if (CanManageUsers)
+            {
+                users = await Api.GetAdminUsersAsync(CancellationToken.None);
+            }
+
+            if (CanViewAudit)
+            {
+                audit = await Api.GetAdminAuditAsync(CancellationToken.None);
+            }
+        }
+        catch
+        {
+            error = "No tienes permiso para consultar esta sección.";
+        }
+    }
+    private async Task SetPlanAsync(Guid userId, string plan) { await Api.SetAdminPlanAsync(userId, plan, CancellationToken.None); await LoadAsync(); }
+    private async Task AddCreditsAsync(Guid userId) { await Api.AddAdminCreditsAsync(userId, 10, CancellationToken.None); await LoadAsync(); }
+    private static string TargetPlan(string currentPlan) => currentPlan == "Premium" ? "Free" : "Premium";
+}

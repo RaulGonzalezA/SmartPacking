@@ -7,6 +7,7 @@ namespace SmartPacking.Web.Components;
 public partial class PackingPanel
 {
     private Guid manualClothingItemId;
+    private readonly HashSet<ClothingType> dismissedMissing = [];
 
     [Parameter]
     public bool IsActive { get; set; }
@@ -72,4 +73,6 @@ public partial class PackingPanel
         await ManualClothingAdded.InvokeAsync(manualClothingItemId);
         manualClothingItemId = Guid.Empty;
     }
+
+    private void MarkMissing(ClothingType type) => dismissedMissing.Add(type);
 }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using SmartPacking.Api.Authentication;
 using SmartPacking.Application;
@@ -12,6 +13,14 @@ public static class AuthenticationServiceCollectionExtensions
         var enabled = configuration.GetValue<bool>("Authentication:Enabled");
         services.AddHttpContextAccessor();
         services.AddScoped<IExternalIdentityAccessor, CurrentUserIdentityAccessor>();
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy("AdminUsers", policy => policy.RequireClaim("permissions", "admin:users"));
+            options.AddPolicy("AdminPlans", policy => policy.RequireClaim("permissions", "admin:plans"));
+            options.AddPolicy("AdminCredits", policy => policy.RequireClaim("permissions", "admin:credits"));
+            options.AddPolicy("AdminBilling", policy => policy.RequireClaim("permissions", "admin:billing"));
+            options.AddPolicy("AdminAudit", policy => policy.RequireClaim("permissions", "admin:audit"));
+        });
         if (!enabled)
         {
             return false;
@@ -33,6 +42,16 @@ public static class AuthenticationServiceCollectionExtensions
                 {
                     OnTokenValidated = context =>
                     {
+                        var identity = context.Principal?.Identity as System.Security.Claims.ClaimsIdentity;
+                        var permissions = context.Principal?.FindAll("permissions")
+                            .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                            .Distinct(StringComparer.Ordinal)
+                            .ToArray() ?? [];
+                        foreach (var permission in permissions.Where(permission => !context.Principal!.HasClaim("permissions", permission)))
+                        {
+                            identity?.AddClaim(new System.Security.Claims.Claim("permissions", permission));
+                        }
+
                         var emailVerified = context.Principal?.FindFirst("https://smartpacking.app/email_verified")?.Value
                             ?? context.Principal?.FindFirst("email_verified")?.Value;
                         if (!bool.TryParse(emailVerified, out var isEmailVerified) || !isEmailVerified)
@@ -44,7 +63,6 @@ public static class AuthenticationServiceCollectionExtensions
                     }
                 };
             });
-        services.AddAuthorization();
         return true;
     }
 }

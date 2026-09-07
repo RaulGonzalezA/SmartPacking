@@ -8,14 +8,12 @@
             <div><p class="type">Tu colección</p><h1>Mi armario</h1><p class="muted">Elige prendas disponibles y mantenlas listas para cada viaje.</p></div>
             <button type="button" disabled="@(IsBusy || isAnalyzing)" @onclick="OpenCreate">+ Añadir prenda</button>
         </header>
-        @if (isAnalyzing)
+        @if (AiUsage is not null)
         {
-            <p class="muted" role="status">Analizando foto…</p>
+            <p class="muted" role="status">IA · Plan @AiUsage.Plan: @AiUsage.Remaining reconocimientos disponibles (@AiUsage.CreditBalance créditos). @if (AiUsage.IsNearLimit) { <strong>Estás cerca del límite mensual.</strong> }</p>
         }
-        <div class="wardrobe-toolbar">
-            <label class="search-field"><span aria-hidden="true">⌕</span><input placeholder="Buscar prendas" @bind="search" @bind:event="oninput" /></label>
-            <div class="filter-chips" aria-label="Filtrar por tipo"><button class="@(selectedType is null ? "active" : string.Empty)" @onclick="() => selectedType = null">Todo</button>@foreach (var type in Enum.GetValues<ClothingType>()) { <button class="@(selectedType == type ? "active" : string.Empty)" @onclick="() => selectedType = type">@TypeName(type)</button> }</div>
-        </div>
+        <GarmentRecognitionPreview IsAnalyzing="isAnalyzing" />
+        <WardrobeFilters Search="search" SearchChanged="value => search = value" SelectedType="selectedType" SelectedTypeChanged="value => selectedType = value" />
         <div class="garment-grid">
             @foreach (var item in GetVisibleItems())
             {
@@ -26,15 +24,36 @@
                 </button>
             }
         </div>
-        @if (GetVisibleItems().Count == 0) { <p class="empty-state">No hay prendas que coincidan con este filtro.</p> }
+        @if (GetVisibleItems().Length == 0) { <p class="empty-state">No hay prendas que coincidan con este filtro.</p> }
     </section>
     @if (DeletedItems.Count > 0) { <details class="archive-section"><summary>Prendas retiradas (@DeletedItems.Count)</summary><div class="archive-items">@foreach (var item in DeletedItems) { <span>@item.Name <button disabled="@IsBusy" @onclick="() => Restored.InvokeAsync(item.Id)">Recuperar</button></span> }</div></details> }
-    @if (showForm) { <div class="ui-modal-backdrop" @onclick="CloseCreate"><section class="ui-modal" role="dialog" aria-modal="true" aria-labelledby="new-garment-title" @onclick:stopPropagation="true"><header><div><p class="type">Nuevo artículo</p><h2 id="new-garment-title">Añadir prenda</h2></div><button type="button" class="icon-button" @onclick="CloseCreate" aria-label="Cerrar">×</button></header><EditForm Model="input" OnValidSubmit="SaveAsync" class="modal-form"><label>Nombre <InputText @bind-Value="input.Name" /></label><label>Propietario <select @bind="input.OwnerId">@foreach (var profile in Profiles.Where(profile => !profile.IsArchived)) { <option value="@profile.Id">@profile.Name</option> }</select></label><label>Tipo <select @bind="input.Type" @bind:after="ApplyDefaultWeight">@foreach (var type in Enum.GetValues<ClothingType>()) { <option value="@type">@TypeName(type)</option> }</select></label><label>Color <InputText @bind-Value="input.Color" /></label><label>Peso aproximado (g) <InputNumber @bind-Value="input.WeightGrams" /></label><label>Foto de la prenda (JPEG, máx. 5 MB)<InputFile OnChange="SelectNewPhoto" accept="image/jpeg" /></label>@if (!string.IsNullOrWhiteSpace(recognitionError)) { <p class="feedback error" role="alert">@recognitionError</p> } else if (newPhoto is not null && RecognitionRequested is not null) { <p class="muted">Propuesta de Gemini aplicada. Revísala antes de guardar.</p> }<footer><button type="button" class="secondary" @onclick="CloseCreate">Cancelar</button><button disabled="@IsBusy">Guardar prenda</button></footer></EditForm></section></div> }
+    @if (showForm)
+    {
+        <div class="ui-modal-backdrop" @onclick="CloseCreate">
+            <section class="ui-modal" role="dialog" aria-modal="true" aria-labelledby="new-garment-title" @onclick:stopPropagation="true">
+                <header><div><p class="type">Nuevo artículo</p><h2 id="new-garment-title">Añadir prenda</h2></div><button type="button" class="icon-button" @onclick="CloseCreate" aria-label="Cerrar">×</button></header>
+                <EditForm Model="input" OnValidSubmit="SaveAsync" class="modal-form">
+                    <label>Nombre <InputText @bind-Value="input.Name" /></label>
+                    <label>Propietario <select @bind="input.OwnerId">@foreach (var profile in Profiles.Where(profile => !profile.IsArchived)) { <option value="@profile.Id">@profile.Name</option> }</select></label>
+                    <label>Tipo <select @bind="input.Type" @bind:after="ApplyDefaultWeight">@foreach (var type in Enum.GetValues<ClothingType>()) { <option value="@type">@TypeName(type)</option> }</select></label>
+                    <label>Color <InputText @bind-Value="input.Color" /></label>
+                    <label>Material <InputText @bind-Value="input.Material" placeholder="Algodón, lana, poliéster…" /></label>
+                    <label>Temporada <select @bind="input.Season">@foreach (var season in Enum.GetValues<Season>()) { <option value="@season">@season</option> }</select></label>
+                    <label>Estilo <select @bind="input.Style">@foreach (var style in Enum.GetValues<Style>()) { <option value="@style">@style</option> }</select></label>
+                    <label>Peso aproximado (g) <InputNumber @bind-Value="input.WeightGrams" /></label>
+                    <label>Foto de la prenda (JPEG, máx. 5 MB)<InputFile OnChange="SelectNewPhoto" accept="image/jpeg" disabled="@isAnalyzing" /></label>
+                    @if (!string.IsNullOrWhiteSpace(newPhotoPreview)) { <img class="garment-upload-preview" src="@newPhotoPreview" alt="Vista previa de la prenda seleccionada" /> }
+                    <GarmentRecognitionPreview IsAnalyzing="isAnalyzing" Error="recognitionError" HasProposal="@(newPhoto is not null && RecognitionRequested is not null && string.IsNullOrWhiteSpace(recognitionError))" />
+                    <footer><button type="button" class="secondary" @onclick="CloseCreate">Cancelar</button><button disabled="@(IsBusy || isAnalyzing)">Guardar prenda</button></footer>
+                </EditForm>
+            </section>
+        </div>
+    }
     @if (selectedItem is not null) { var item = selectedItem; <div class="ui-modal-backdrop" @onclick="CloseDetails"><section class="ui-modal garment-modal" role="dialog" aria-modal="true" aria-labelledby="garment-detail-title" @onclick:stopPropagation="true"><header><div><p class="type">@TypeName(item.Type)</p><h2 id="garment-detail-title">@item.Name</h2></div><button type="button" class="icon-button" @onclick="CloseDetails" aria-label="Cerrar">×</button></header><div class="garment-detail-content">@if (photoUrls.TryGetValue(item.Id, out var uploadedPhotoUrl) || !string.IsNullOrWhiteSpace(item.PhotoUrl)) { <img src="@(uploadedPhotoUrl ?? item.PhotoUrl)" alt="@item.Name" /> } else { <span class="garment-detail-placeholder" aria-hidden="true">@GarmentIcon(item.Type)</span> }<dl><div><dt>Color</dt><dd>@item.Color</dd></div><div><dt>Peso</dt><dd>@item.WeightGrams g</dd></div><div><dt>Temporada</dt><dd>@item.Season</dd></div><div><dt>Propietario</dt><dd>@OwnerName(item.OwnerProfileId)</dd></div></dl><div class="garment-toggles"><label><input type="checkbox" checked="@item.IsClean" @onchange="args => ChangeItemAsync(item, args.Value is bool value && value, item.IsAvailable)" /> Limpia</label><label><input type="checkbox" checked="@item.IsAvailable" @onchange="args => ChangeItemAsync(item, item.IsClean, args.Value is bool value && value)" /> Disponible</label></div><label class="photo-upload">Actualizar foto <InputFile OnChange="file => UploadPhotoAsync(item.Id, file)" accept="image/jpeg" /></label><button disabled="@IsBusy" class="danger" @onclick="() => RequestRemoval(item.Id)">Retirar del armario</button></div></section></div> }
     @if (pendingRemovalId is Guid) { <div class="ui-modal-backdrop"><section class="ui-modal confirmation-modal" role="alertdialog"><h2>¿Retirar esta prenda?</h2><p>Podrás recuperarla más adelante desde prendas retiradas.</p><footer><button disabled="@IsBusy" class="secondary" @onclick="CancelRemoval">Cancelar</button><button disabled="@IsBusy" class="danger" @onclick="ConfirmRemovalAsync">Retirar</button></footer></section></div> }
 }
 
-@code {
+@* Code moved to WardrobePanel.razor.cs
     private readonly Input input = new();
     private readonly Dictionary<Guid, string> photoUrls = [];
     private IBrowserFile? newPhoto;
@@ -137,4 +156,4 @@
         public Style Style { get; set; } = Style.Casual;
         public int WeightGrams { get; set; } = 180;
     }
-}
+} *@

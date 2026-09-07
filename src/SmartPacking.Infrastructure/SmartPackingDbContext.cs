@@ -6,6 +6,7 @@ public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext
 {
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<UserAuditEventEntity> UserAuditEvents => Set<UserAuditEventEntity>();
+    public DbSet<GarmentRecognitionEventEntity> GarmentRecognitionEvents => Set<GarmentRecognitionEventEntity>();
     public DbSet<ClothingItemEntity> ClothingItems => Set<ClothingItemEntity>();
     public DbSet<TripEntity> Trips => Set<TripEntity>();
     public DbSet<PackingListEntity> PackingLists => Set<PackingListEntity>();
@@ -24,6 +25,8 @@ public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext
         modelBuilder.Entity<UserEntity>().HasIndex(entity => new { entity.ExternalIssuer, entity.ExternalSubject }).IsUnique();
         modelBuilder.Entity<UserAuditEventEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<UserAuditEventEntity>().HasIndex(entity => new { entity.UserId, entity.OccurredAt });
+        modelBuilder.Entity<GarmentRecognitionEventEntity>().HasKey(entity => entity.Id);
+        modelBuilder.Entity<GarmentRecognitionEventEntity>().HasIndex(entity => new { entity.UserId, entity.OccurredAt });
         modelBuilder.Entity<ClothingItemEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.Name }).IsUnique();
         modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.IsDeleted });
@@ -61,6 +64,8 @@ public sealed class UserEntity
     public string? PostalCode { get; set; }
     public string? City { get; set; }
     public string? Region { get; set; }
+    public string AiPlan { get; set; } = "Free";
+    public int AiRecognitionCredits { get; set; }
 }
 public sealed class UserAuditEventEntity
 {
@@ -68,6 +73,12 @@ public sealed class UserAuditEventEntity
     public Guid UserId { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
     public string Action { get; set; } = string.Empty;
+}
+public sealed class GarmentRecognitionEventEntity
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public DateTimeOffset OccurredAt { get; set; }
 }
 public sealed class ClothingItemEntity
 {

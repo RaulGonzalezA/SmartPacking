@@ -29,7 +29,7 @@ public sealed class ApiProblemDetailsHandler : DelegatingHandler
             : null;
         var exception = new ApiProblemException((int)response.StatusCode, problem?.Title ?? "No se pudo completar la operación.", problem?.Detail, errors);
         response.Dispose();
-        throw exception;
+         throw exception;
     }
 }
 

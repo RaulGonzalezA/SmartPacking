@@ -177,6 +177,25 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                     b.ToTable("FamilyProfiles");
                 });
 
+            modelBuilder.Entity("SmartPacking.Infrastructure.GarmentRecognitionEventEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "OccurredAt");
+
+                    b.ToTable("GarmentRecognitionEvents");
+                });
+
             modelBuilder.Entity("SmartPacking.Infrastructure.PackingListEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -385,6 +404,13 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
 
                     b.Property<string>("Address")
                         .HasColumnType("text");
+
+                    b.Property<string>("AiPlan")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("AiRecognitionCredits")
+                        .HasColumnType("integer");
 
                     b.Property<string>("City")
                         .HasColumnType("text");

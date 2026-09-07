@@ -19,9 +19,13 @@ public partial class Home : ComponentBase, IDisposable
     private CancellationTokenSource? loadCancellation;
     private WardrobePanel? wardrobePanel;
     private UserProfile? currentUser;
+    private GarmentRecognitionUsageResult? aiUsage;
     private bool authenticationResolved;
     private bool emailVerified = true;
     private string? email;
+    private readonly HashSet<string> permissions = new(StringComparer.Ordinal);
+    private bool HasPermission(string permission) => permissions.Contains(permission);
+    private bool HasAdminAccess => permissions.Any(permission => permission.StartsWith("admin:", StringComparison.Ordinal));
     private string? DefaultOrigin
     {
         get
@@ -55,6 +59,7 @@ public partial class Home : ComponentBase, IDisposable
         if (AuthenticationStateTask is not null)
         {
             var principal = (await AuthenticationStateTask).User;
+            foreach (var permission in principal.FindAll("permissions").Concat(principal.FindAll("https://smartpacking.app/permissions")).SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))) permissions.Add(permission);
             email = principal.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
                 ?? principal.FindFirst("email")?.Value;
             var emailVerifiedValue = principal.FindFirst("email_verified")?.Value
@@ -69,6 +74,7 @@ public partial class Home : ComponentBase, IDisposable
         }
 
         currentUser = await Api.GetCurrentUserAsync(LoadCancellationToken);
+        aiUsage = await Api.GetAiUsageAsync(LoadCancellationToken);
         if (currentUser.IsOnboarded)
         {
             await LoadAsync();
@@ -257,7 +263,13 @@ public partial class Home : ComponentBase, IDisposable
         await LoadAsync();
     });
     private async Task UploadClothingPhotoAsync(Guid id, IBrowserFile file) { await using var content = file.OpenReadStream(5 * 1024 * 1024); var url = await Api.UploadClothingPhotoAsync(id, content, file.ContentType, file.Name, CancellationToken.None); wardrobePanel?.SetPhotoUrl(id, url); State.Feedback = "Foto de la prenda actualizada."; }
-    private async Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(IBrowserFile file) { await using var content = file.OpenReadStream(5 * 1024 * 1024); return await Api.RecognizeGarmentAsync(content, file.ContentType, file.Name, lifetimeCancellation.Token); }
+    private async Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(IBrowserFile file)
+    {
+        await using var content = file.OpenReadStream(5 * 1024 * 1024);
+        var suggestion = await Api.RecognizeGarmentAsync(content, file.ContentType, file.Name, lifetimeCancellation.Token);
+        aiUsage = await Api.GetAiUsageAsync(lifetimeCancellation.Token);
+        return suggestion;
+    }
     private async Task UpdateStatusAsync(ClothingItem item, bool clean, bool available) { await Api.UpdateClothingStatusAsync(item.Id, clean, available, CancellationToken.None); await LoadAsync(); }
     private async Task DeleteClothingAsync(Guid id) { await Api.DeleteClothingAsync(id, CancellationToken.None); await LoadAsync(); }
     private async Task RestoreClothingAsync(Guid id) { await Api.RestoreClothingAsync(id, CancellationToken.None); await LoadAsync(); }

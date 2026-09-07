@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SmartPacking.Infrastructure;
 
@@ -11,9 +12,11 @@ using SmartPacking.Infrastructure;
 namespace SmartPacking.Infrastructure.SqlServer.Migrations
 {
     [DbContext(typeof(SmartPackingDbContext))]
-    partial class SmartPackingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260907140446_AddGarmentRecognitionUsage")]
+    partial class AddGarmentRecognitionUsage
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -404,13 +407,6 @@ namespace SmartPacking.Infrastructure.SqlServer.Migrations
 
                     b.Property<string>("Address")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("AiPlan")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("AiRecognitionCredits")
-                        .HasColumnType("int");
 
                     b.Property<string>("City")
                         .HasColumnType("nvarchar(max)");

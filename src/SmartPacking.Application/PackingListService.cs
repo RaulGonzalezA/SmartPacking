@@ -3,7 +3,7 @@ using SmartPacking.Domain;
 namespace SmartPacking.Application;
 
 public sealed record PlannedItem(RecommendedItem Recommendation, bool IsPacked);
-public sealed record TripPackingPlan(Trip Trip, Guid PackingListId, IReadOnlyList<PlannedItem> Items, int TotalWeightGrams);
+public sealed record TripPackingPlan(Trip Trip, Guid PackingListId, IReadOnlyList<PlannedItem> Items, int TotalWeightGrams, IReadOnlyList<PackingMissingItem>? MissingItems = null, IReadOnlyList<DailyOutfit>? Outfits = null);
 
 public sealed class PackingListService(ISmartPackingStore store)
 {
@@ -32,6 +32,6 @@ public sealed class PackingListService(ISmartPackingStore store)
                     ?? new RecommendedItem(wardrobeByItem[item.ClothingItemId], 0, ["retirada del armario; se conserva por ser una maleta existente"]),
                 item.IsPacked))
             .ToArray();
-        return new TripPackingPlan(trip, packingList.Id, items, items.Sum(item => item.Recommendation.Item.WeightGrams ?? 0));
+        return new TripPackingPlan(trip, packingList.Id, items, items.Sum(item => item.Recommendation.Item.WeightGrams ?? 0), recommendation.MissingItems, OutfitRecommendationService.Create(trip, items));
     }
 }

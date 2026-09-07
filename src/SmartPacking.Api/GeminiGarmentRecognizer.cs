@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Diagnostics;
 using System.Text.Json;
 using SmartPacking.Application;
 
@@ -34,12 +35,12 @@ public sealed partial class GeminiGarmentRecognizer(HttpClient httpClient, IConf
         using var message = new HttpRequestMessage(HttpMethod.Post, "v1beta/interactions") { Content = JsonContent.Create(request) };
         message.Headers.Add("x-goog-api-key", apiKey);
         message.Headers.Add("Api-Revision", "2026-05-20");
+        var stopwatch = Stopwatch.StartNew();
         using var response = await httpClient.SendAsync(message, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            var detail = await response.Content.ReadAsStringAsync(cancellationToken);
-            LogGeminiFailure(logger, response.StatusCode, detail);
-            throw new HttpRequestException($"Gemini no pudo analizar la imagen: {detail}", null, response.StatusCode);
+            LogGeminiFailure(logger, response.StatusCode, stopwatch.ElapsedMilliseconds, request.model);
+            throw new HttpRequestException("Gemini no pudo analizar la imagen.", null, response.StatusCode);
         }
 
         using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
@@ -50,11 +51,15 @@ public sealed partial class GeminiGarmentRecognizer(HttpClient httpClient, IConf
             .GetProperty("text").GetString();
         var suggestion = JsonSerializer.Deserialize<GarmentRecognitionSuggestion>(text ?? string.Empty, JsonOptions)
             ?? throw new InvalidOperationException("Gemini no devolvió una propuesta válida.");
+        LogGeminiSuccess(logger, stopwatch.ElapsedMilliseconds, request.model);
         return Normalize(suggestion);
     }
 
-    [LoggerMessage(LogLevel.Warning, "Gemini rechazó el reconocimiento con estado {StatusCode}. Detalle: {Detail}")]
-    private static partial void LogGeminiFailure(ILogger logger, System.Net.HttpStatusCode statusCode, string detail);
+    [LoggerMessage(LogLevel.Warning, "Gemini rechazó el reconocimiento con estado {StatusCode} en {ElapsedMilliseconds} ms para {Model}")]
+    private static partial void LogGeminiFailure(ILogger logger, System.Net.HttpStatusCode statusCode, long elapsedMilliseconds, string model);
+
+    [LoggerMessage(LogLevel.Information, "Gemini completó el reconocimiento en {ElapsedMilliseconds} ms con {Model}")]
+    private static partial void LogGeminiSuccess(ILogger logger, long elapsedMilliseconds, string model);
 
     private static GarmentRecognitionSuggestion Normalize(GarmentRecognitionSuggestion value)
     {
