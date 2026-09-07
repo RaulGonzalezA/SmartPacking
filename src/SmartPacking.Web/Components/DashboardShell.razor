@@ -43,7 +43,7 @@
     [Parameter] public UserProfile? User { get; set; }
     [Parameter] public string? Email { get; set; }
     [Parameter] public bool IsEmailVerified { get; set; }
-    [Parameter] public EventCallback<UserProfile> UserUpdated { get; set; }
+    [Parameter] public Func<UserProfile, Task<IReadOnlyDictionary<string, string[]>>>? UserUpdated { get; set; }
     [Parameter] public EventCallback AccountDeleted { get; set; }
     [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
 }

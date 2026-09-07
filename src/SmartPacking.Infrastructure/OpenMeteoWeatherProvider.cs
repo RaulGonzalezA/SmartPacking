@@ -19,22 +19,32 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
             return [];
         }
 
+        var normalizedQuery = query.Trim().ToUpperInvariant();
+        var cacheKey = $"cities:v1:{normalizedQuery}";
+        var cachedCities = await cache.GetStringAsync(cacheKey, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(cachedCities))
+        {
+            return JsonSerializer.Deserialize<CitySuggestion[]>(cachedCities) ?? [];
+        }
+
         try
         {
             using var searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             searchCancellation.CancelAfter(TimeSpan.FromSeconds(2));
             var response = await httpClient.GetFromJsonAsync<GeocodingResponse>($"https://geocoding-api.open-meteo.com/v1/search?name={Uri.EscapeDataString(query.Trim())}&count=10&language=es&format=json", searchCancellation.Token);
             var results = response?.Results?.Select(result => new CitySuggestion(result.Name ?? string.Empty, result.Country, result.Admin1)).Where(result => !string.IsNullOrWhiteSpace(result.Name)).ToArray() ?? [];
-            return results.Length > 0 ? results : FindFallbackCities(query);
+            var cities = results.Length > 0 ? results : FindFallbackCities(query);
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(cities), new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7) }, cancellationToken);
+            return cities;
         }
         catch (HttpRequestException exception)
         {
             LogNoResponse(logger, exception, query);
-            return FindFallbackCities(query);
+            return await CacheFallbackCitiesAsync(cacheKey, query, cancellationToken);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return FindFallbackCities(query);
+            return await CacheFallbackCitiesAsync(cacheKey, query, cancellationToken);
         }
     }
     public async Task<WeatherForecast?> GetAsync(string destination, DateOnly start, DateOnly end, CancellationToken cancellationToken)
@@ -138,5 +148,12 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
             new CitySuggestion("Barcelona", "España", "Cataluña"), new CitySuggestion("Valencia", "España", "Comunidad Valenciana"), new CitySuggestion("Roma", "Italia", "Lacio"), new CitySuggestion("París", "Francia", "Isla de Francia")
         };
         return cities.Where(city => city.DisplayName.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase)).Take(10).ToArray();
+    }
+
+    private async Task<CitySuggestion[]> CacheFallbackCitiesAsync(string cacheKey, string query, CancellationToken cancellationToken)
+    {
+        var cities = FindFallbackCities(query);
+        await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(cities), new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1) }, cancellationToken);
+        return cities;
     }
 }

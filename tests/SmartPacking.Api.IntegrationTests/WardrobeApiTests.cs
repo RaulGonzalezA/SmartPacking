@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,31 @@ namespace SmartPacking.Api.IntegrationTests;
     Justification = "xUnit invoca IAsyncLifetime.DisposeAsync para liberar los recursos de cada prueba.")]
 public sealed class WardrobeApiTests : IAsyncLifetime
 {
+    [Fact]
+    public async Task UserAddressRequiresCityWhenAnyAddressFieldIsProvided()
+    {
+        var response = await client.PutAsJsonAsync("/api/me", new { name = "Lucía", street = "Calle Mayor, 12" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        var errors = problem?.Errors ?? new Dictionary<string, string[]>();
+        errors.Should().ContainKey("city");
+    }
+
+    [Fact]
+    public async Task CreatingTripPersistsAnExplainableTransportPlan()
+    {
+        var request = new SaveTripRequest("Roma", new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 14), 15, 24, [(int)Style.Casual], null, 10000, true, TransportTypes: [(int)TransportType.Plane], Origin: "Ocaña, Toledo");
+
+        var response = await client.PostAsJsonAsync("/api/trips", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var trip = await response.Content.ReadFromJsonAsync<TripResponse>();
+        trip!.TransportPlan.Should().NotBeNull();
+        trip.TransportPlan!.Legs.Should().Contain(leg => leg.From == "Ocaña, Toledo" && leg.To == "Madrid-Barajas");
+        trip.TransportPlan.Legs.Should().Contain(leg => leg.Type == (int)TransportType.Plane && leg.To == "Roma Fiumicino");
+    }
+
     private SqliteConnection databaseConnection = null!;
     private WebApplicationFactory<Program> factory = null!;
     private HttpClient client = null!;
@@ -161,11 +187,12 @@ public sealed class WardrobeApiTests : IAsyncLifetime
     public async Task UserCanUpdateAndPermanentlyDeleteTheirLocalData()
     {
         var currentUser = await client.GetFromJsonAsync<UserProfile>("/api/me");
-        var update = await client.PutAsJsonAsync("/api/me", new { name = "María", address = "Ocaña, Toledo" });
+        var update = await client.PutAsJsonAsync("/api/me", new { name = "María", street = "Calle Mayor, 12", postalCode = "45300", city = "Ocaña", region = "Toledo, España" });
         update.StatusCode.Should().Be(HttpStatusCode.OK);
         var updatedUser = await update.Content.ReadFromJsonAsync<UserProfile>();
         updatedUser!.Name.Should().Be("María");
-        updatedUser.Address.Should().Be("Ocaña, Toledo");
+        updatedUser.Address.Should().Be("Calle Mayor, 12 · 45300 · Ocaña · Toledo, España");
+        updatedUser.AddressDetails.Should().Be(new UserAddress("Calle Mayor, 12", "45300", "Ocaña", "Toledo, España"));
 
         (await client.PostAsJsonAsync("/api/wardrobe", new UpsertClothingItemRequest("Abrigo", ClothingType.Jacket, Season.Winter, "Gris", 7, true, Style.Casual, 600, true, true, 70, [], null))).EnsureSuccessStatusCode();
         (await client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, "/api/me") { Content = JsonContent.Create(new { confirmation = "ELIMINAR" }) })).StatusCode.Should().Be(HttpStatusCode.NoContent);

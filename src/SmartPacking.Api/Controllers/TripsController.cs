@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
 using SmartPacking.Api;
+using SmartPacking.Api.Validation;
 using SmartPacking.Application;
 using SmartPacking.Contracts;
 using SmartPacking.Domain;
@@ -9,7 +11,7 @@ namespace SmartPacking.Api.Controllers;
 
 [ApiController]
 [Route("api/trips")]
-public sealed class TripsController(ISmartPackingStore store, PackingListService packingLists, ProfilePackingListService profilePackingLists, OpenMeteoWeatherProvider weather) : ControllerBase
+public sealed class TripsController(ISmartPackingStore store, PackingListService packingLists, ProfilePackingListService profilePackingLists, OpenMeteoWeatherProvider weather, IValidator<SaveTripRequest> tripValidator) : ControllerBase
 {
     private const string viajeNoEncontrado = "Viaje no encontrado";
 
@@ -23,9 +25,10 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
     [HttpPost]
     public async Task<ActionResult<TripResponse>> CreateAsync(SaveTripRequest request, CancellationToken cancellationToken)
     {
-        if (!HasValidTripData(request))
+        var validationProblem = await tripValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["trip"] = ["Introduce un destino y fechas válidas."] }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
@@ -47,6 +50,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
             request.LuggageDepthCentimetres ?? 20,
             request.DayPlans?.Select(plan => new TripDayPlan(plan.Date, plan.Activities.Select(activity => (TripActivity)activity).ToArray())).ToArray(), request.AirlineCode,
             request.TransportTypes?.Select(type => (TransportType)type).ToArray(), ToLuggages(request.Luggages), request.Origin?.Trim());
+        trip = trip with { TransportPlan = TransportPlanner.Build(trip.Origin, trip.Destination, trip.TransportTypesOrEmpty) };
         var created = await store.AddTripAsync(user.Id, trip, cancellationToken);
         await store.SetTripProfilesAsync(user.Id, created.Id, [user.Id], cancellationToken);
         await store.AddChecklistItemsAsync(user.Id, ChecklistDefaults.Create(created.Id), cancellationToken);
@@ -63,13 +67,15 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
     [HttpPut("{tripId:guid}")]
     public async Task<ActionResult<TripResponse>> UpdateAsync(Guid tripId, SaveTripRequest request, CancellationToken cancellationToken)
     {
-        if (!HasValidTripData(request))
+        var validationProblem = await tripValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["trip"] = ["Introduce datos válidos para el viaje."] }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
         var trip = new Trip(tripId, request.Destination.Trim(), request.StartDate, request.EndDate, request.MinimumTemperatureCelsius, request.MaximumTemperatureCelsius, request.Activities.Count == 0 ? [Style.Casual] : request.Activities.Select(activity => (Style)activity).ToArray(), request.TemplateKey, request.LuggageAllowanceGrams ?? 10000, request.CabinOnly ?? true, (LuggageType)(request.LuggageType ?? (int)(request.CabinOnly ?? true ? LuggageType.Cabin : LuggageType.Checked)), request.LuggageHeightCentimetres ?? 55, request.LuggageWidthCentimetres ?? 40, request.LuggageDepthCentimetres ?? 20, request.DayPlans?.Select(plan => new TripDayPlan(plan.Date, plan.Activities.Select(activity => (TripActivity)activity).ToArray())).ToArray(), request.AirlineCode, request.TransportTypes?.Select(type => (TransportType)type).ToArray(), ToLuggages(request.Luggages), request.Origin?.Trim());
+        trip = trip with { TransportPlan = TransportPlanner.Build(trip.Origin, trip.Destination, trip.TransportTypesOrEmpty) };
         var updated = await store.UpdateTripAsync(user.Id, trip, cancellationToken);
         return updated is null ? NotFoundProblem(viajeNoEncontrado) : Ok(ToResponse(updated));
     }
@@ -220,29 +226,9 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
         return NoContent();
     }
 
-    private static TripResponse ToResponse(Trip trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, trip.Activities.Select(activity => (int)activity).ToArray(), trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (int)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, trip.DayPlansOrEmpty.Select(plan => new TripDayPlanContract(plan.Date, plan.Activities.Select(activity => (int)activity).ToArray())).ToArray(), trip.AirlineCode, trip.TransportTypesOrEmpty.Select(type => (int)type).ToArray(), trip.LuggagesOrDefault.Select(luggage => new TripLuggageContract(luggage.Id, (int)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray(), trip.Origin);
+    private static TripResponse ToResponse(Trip trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, trip.Activities.Select(activity => (int)activity).ToArray(), trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (int)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, trip.DayPlansOrEmpty.Select(plan => new TripDayPlanContract(plan.Date, plan.Activities.Select(activity => (int)activity).ToArray())).ToArray(), trip.AirlineCode, trip.TransportTypesOrEmpty.Select(type => (int)type).ToArray(), trip.LuggagesOrDefault.Select(luggage => new TripLuggageContract(luggage.Id, (int)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray(), trip.Origin, ToTransportPlan(trip.TransportPlan));
+    private static TransportPlanContract? ToTransportPlan(TransportPlan? plan) => plan is null ? null : new(plan.Summary, plan.Legs.Select(leg => new TransportLegContract((int)leg.Type, leg.From, leg.To, leg.EstimatedMinutes, leg.Description)).ToArray());
     private static TripLuggage[]? ToLuggages(IReadOnlyCollection<TripLuggageContract>? luggages) => luggages?.Select(luggage => new TripLuggage(luggage.Id == Guid.Empty ? Guid.NewGuid() : luggage.Id, (LuggageType)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray();
-    private static bool HasValidTripData(SaveTripRequest request) =>
-        request.EndDate >= request.StartDate &&
-        !string.IsNullOrWhiteSpace(request.Destination) &&
-        (request.Origin is null || request.Origin.Trim().Length <= 160) &&
-        request.LuggageAllowanceGrams is not < 0 &&
-        request.LuggageHeightCentimetres is not <= 0 &&
-        request.LuggageWidthCentimetres is not <= 0 &&
-        request.LuggageDepthCentimetres is not <= 0 &&
-        (request.LuggageType is null || Enum.IsDefined((LuggageType)request.LuggageType.Value)) &&
-        (request.TransportTypes is null || request.TransportTypes.All(type => Enum.IsDefined((TransportType)type))) &&
-        (request.Luggages is null || request.Luggages.Count > 0 && request.Luggages.All(luggage =>
-            Enum.IsDefined((LuggageType)luggage.Type) &&
-            luggage.AllowanceGrams >= 0 &&
-            luggage.HeightCentimetres > 0 &&
-            luggage.WidthCentimetres > 0 &&
-            luggage.DepthCentimetres > 0)) &&
-        (request.DayPlans is null || request.DayPlans.All(plan =>
-            plan.Date >= request.StartDate &&
-            plan.Date <= request.EndDate &&
-            plan.Activities.Count is >= 1 and <= 3 &&
-            plan.Activities.All(activity => Enum.IsDefined((TripActivity)activity))));
     private static int EstimatedVolumeMillilitres(ClothingType type) => type switch
     {
         ClothingType.Jacket => 7000,

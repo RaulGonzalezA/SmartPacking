@@ -316,6 +316,9 @@ namespace SmartPacking.Infrastructure.SqlServer.Migrations
                     b.Property<string>("TemplateKey")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("TransportPlan")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("TransportTypes")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -380,6 +383,9 @@ namespace SmartPacking.Infrastructure.SqlServer.Migrations
                     b.Property<string>("Address")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("City")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("ExternalIssuer")
                         .HasColumnType("nvarchar(450)");
 
@@ -391,6 +397,15 @@ namespace SmartPacking.Infrastructure.SqlServer.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PostalCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Region")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Street")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");

@@ -8,7 +8,7 @@ public interface IWebSmartPackingClient
     Task<IReadOnlyList<CitySuggestion>> SearchCitiesAsync(string query, CancellationToken cancellationToken);
     Task<UserProfile> GetCurrentUserAsync(CancellationToken cancellationToken);
     Task<UserProfile> CompleteOnboardingAsync(string name, CancellationToken cancellationToken);
-    Task<UserProfile> UpdateCurrentUserAsync(string name, string? address, CancellationToken cancellationToken);
+    Task<UserProfile> UpdateCurrentUserAsync(string name, UserAddress? address, CancellationToken cancellationToken);
     Task DeleteCurrentUserAsync(string confirmation, CancellationToken cancellationToken);
     Task<IReadOnlyList<Trip>> GetTripsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<FamilyProfile>> GetProfilesAsync(CancellationToken cancellationToken);
@@ -27,7 +27,8 @@ public interface IWebSmartPackingClient
     Task UpdateTripAsync(Trip trip, CancellationToken cancellationToken);
     Task DeleteTripAsync(Guid tripId, CancellationToken cancellationToken);
     Task SetTripProfilesAsync(Guid tripId, IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken);
-    Task CreateClothingAsync(ClothingItem item, CancellationToken cancellationToken);
+    Task<ClothingItem> CreateClothingAsync(ClothingItem item, CancellationToken cancellationToken);
+    Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(Stream content, string contentType, string fileName, CancellationToken cancellationToken);
     Task UpdateClothingStatusAsync(Guid clothingItemId, bool isClean, bool isAvailable, CancellationToken cancellationToken);
     Task DeleteClothingAsync(Guid clothingItemId, CancellationToken cancellationToken);
     Task RestoreClothingAsync(Guid clothingItemId, CancellationToken cancellationToken);

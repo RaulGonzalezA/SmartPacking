@@ -22,6 +22,19 @@ public partial class Home : ComponentBase, IDisposable
     private bool authenticationResolved;
     private bool emailVerified = true;
     private string? email;
+    private string? DefaultOrigin
+    {
+        get
+        {
+            var city = currentUser?.AddressDetails?.City;
+            if (!string.IsNullOrWhiteSpace(city))
+            {
+                return city.Trim();
+            }
+
+            return null;
+        }
+    }
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
@@ -178,7 +191,39 @@ public partial class Home : ComponentBase, IDisposable
 
     private Task CreateTripAsync(TripFormInput input) => RunAsync(async () => { var created = await Api.CreateTripAsync(input.ToTrip(Guid.NewGuid()), CancellationToken.None); State.SelectTrip(created.Id); State.Feedback = "Viaje creado. Ya puedes completar sus detalles."; await LoadAsync(); });
     private Task CompleteOnboardingAsync(string name) => RunAsync(async () => { currentUser = await Api.CompleteOnboardingAsync(name, lifetimeCancellation.Token); State.Feedback = $"Perfil de {currentUser.Name} creado."; BeginLoad(); await LoadAsync(); });
-    private Task UpdateCurrentUserAsync(UserProfile profile) => RunAsync(async () => { currentUser = await Api.UpdateCurrentUserAsync(profile.Name, profile.Address, lifetimeCancellation.Token); State.Feedback = "Perfil actualizado."; await LoadAsync(); });
+    private async Task<IReadOnlyDictionary<string, string[]>> UpdateCurrentUserAsync(UserProfile profile)
+    {
+        State.IsSubmitting = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            currentUser = await Api.UpdateCurrentUserAsync(profile.Name, profile.AddressDetails, lifetimeCancellation.Token);
+            State.Feedback = "Perfil actualizado.";
+            await LoadAsync();
+            return new Dictionary<string, string[]>();
+        }
+        catch (ApiProblemException exception) when (exception.StatusCode == StatusCodes.Status401Unauthorized)
+        {
+            Navigation.NavigateTo("/login?error=session_expired", forceLoad: true);
+            return new Dictionary<string, string[]> { ["form"] = ["Tu sesión ha caducado. Inicia sesión de nuevo."] };
+        }
+        catch (ApiProblemException exception) when (exception.Errors.Count > 0)
+        {
+            return exception.Errors;
+        }
+        catch (ApiProblemException exception)
+        {
+            return new Dictionary<string, string[]> { ["form"] = [exception.Message] };
+        }
+        catch (HttpRequestException)
+        {
+            return new Dictionary<string, string[]> { ["form"] = ["No se ha podido conectar con el servicio. Inténtalo de nuevo."] };
+        }
+        finally
+        {
+            State.IsSubmitting = false;
+        }
+    }
     private Task DeleteCurrentUserAsync() => RunAsync(async () => { await Api.DeleteCurrentUserAsync("ELIMINAR", lifetimeCancellation.Token); Navigation.NavigateTo("/auth/logout", forceLoad: true); });
     private Task SaveTripAsync(Trip trip) => RunAsync(async () => { await Api.UpdateTripAsync(trip, CancellationToken.None); State.Feedback = "Viaje actualizado."; await LoadAsync(); });
     private Task DeleteTripAsync() => RunAsync(async () =>
@@ -200,8 +245,19 @@ public partial class Home : ComponentBase, IDisposable
     private Task SaveTravellersAsync(IReadOnlyCollection<Guid> ids) => RunAsync(async () => { await Api.SetTripProfilesAsync(State.SelectedTripId, ids, CancellationToken.None); State.Feedback = "Viajeros guardados."; await LoadTripAsync(); });
     private Task SaveTravellerAsync(FamilyProfile profile) => RunAsync(async () => { await Api.UpdateProfileAsync(profile.Id, profile.Name, profile.PackingNotes, profile.MedicalNotes, CancellationToken.None); State.Feedback = "Viajero actualizado."; await LoadAsync(); });
     private Task ArchiveTravellerAsync(Guid id) => RunAsync(async () => { await Api.ArchiveProfileAsync(id, CancellationToken.None); State.Feedback = "Viajero archivado. Sus maletas anteriores se conservan."; await LoadAsync(); });
-    private Task CreateClothingAsync(string name, string color, Guid ownerId, ClothingType type, int weightGrams) => RunAsync(async () => { await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), name, type, Season.AllYear, color, 2, false, Style.Casual, weightGrams, true, true, 70, [], false, ownerId), CancellationToken.None); State.Feedback = "Prenda guardada."; await LoadAsync(); });
+    private Task CreateClothingAsync(string name, string color, Guid ownerId, ClothingType type, int weightGrams, IBrowserFile? file) => RunAsync(async () =>
+    {
+        var item = await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), name, type, Season.AllYear, color, 2, false, Style.Casual, weightGrams, true, true, 70, [], false, ownerId), CancellationToken.None);
+        if (file is not null)
+        {
+            await UploadClothingPhotoAsync(item.Id, file);
+        }
+
+        State.Feedback = "Prenda guardada.";
+        await LoadAsync();
+    });
     private async Task UploadClothingPhotoAsync(Guid id, IBrowserFile file) { await using var content = file.OpenReadStream(5 * 1024 * 1024); var url = await Api.UploadClothingPhotoAsync(id, content, file.ContentType, file.Name, CancellationToken.None); wardrobePanel?.SetPhotoUrl(id, url); State.Feedback = "Foto de la prenda actualizada."; }
+    private async Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(IBrowserFile file) { await using var content = file.OpenReadStream(5 * 1024 * 1024); return await Api.RecognizeGarmentAsync(content, file.ContentType, file.Name, lifetimeCancellation.Token); }
     private async Task UpdateStatusAsync(ClothingItem item, bool clean, bool available) { await Api.UpdateClothingStatusAsync(item.Id, clean, available, CancellationToken.None); await LoadAsync(); }
     private async Task DeleteClothingAsync(Guid id) { await Api.DeleteClothingAsync(id, CancellationToken.None); await LoadAsync(); }
     private async Task RestoreClothingAsync(Guid id) { await Api.RestoreClothingAsync(id, CancellationToken.None); await LoadAsync(); }

@@ -12,7 +12,7 @@ public sealed record AddPackingListItemRequest(Guid ClothingItemId);
 public sealed record CreateFamilyProfileRequest(string Name, string? PackingNotes = null, string? MedicalNotes = null);
 public sealed record UpdateFamilyProfileRequest(string Name, string? PackingNotes = null, string? MedicalNotes = null);
 public sealed record CompleteUserOnboardingRequest(string Name);
-public sealed record UpdateCurrentUserRequest(string Name, string? Address = null);
+public sealed record UpdateCurrentUserRequest(string Name, string? Street = null, string? PostalCode = null, string? City = null, string? Region = null);
 public sealed record DeleteCurrentUserRequest(string Confirmation);
 public sealed record SetTripProfilesRequest(IReadOnlyCollection<Guid> ProfileIds);
 public sealed record SaveUserTripTemplateRequest(string Name, string? Description, IReadOnlyCollection<Style> Activities, int MinimumTemperatureCelsius, int MaximumTemperatureCelsius, int LuggageAllowanceGrams, bool CabinOnly);

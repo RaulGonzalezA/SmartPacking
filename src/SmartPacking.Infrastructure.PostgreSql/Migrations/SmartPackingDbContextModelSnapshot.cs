@@ -316,6 +316,9 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                     b.Property<string>("TemplateKey")
                         .HasColumnType("text");
 
+                    b.Property<string>("TransportPlan")
+                        .HasColumnType("text");
+
                     b.Property<string>("TransportTypes")
                         .IsRequired()
                         .HasColumnType("text");
@@ -380,6 +383,9 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                     b.Property<string>("Address")
                         .HasColumnType("text");
 
+                    b.Property<string>("City")
+                        .HasColumnType("text");
+
                     b.Property<string>("ExternalIssuer")
                         .HasColumnType("text");
 
@@ -391,6 +397,15 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PostalCode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Region")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Street")
                         .HasColumnType("text");
 
                     b.HasKey("Id");

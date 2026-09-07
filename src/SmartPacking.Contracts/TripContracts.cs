@@ -19,7 +19,8 @@ public sealed record TripResponse(
     string? AirlineCode = null,
     IReadOnlyCollection<int>? TransportTypes = null,
     IReadOnlyCollection<TripLuggageContract>? Luggages = null,
-    string? Origin = null);
+    string? Origin = null,
+    TransportPlanContract? TransportPlan = null);
 
 public sealed record SaveTripRequest(
     string Destination,
@@ -43,5 +44,7 @@ public sealed record SaveTripRequest(
 
 public sealed record TripDayPlanContract(DateOnly Date, IReadOnlyCollection<int> Activities);
 public sealed record TripLuggageContract(Guid Id, int Type, int AllowanceGrams, int HeightCentimetres, int WidthCentimetres, int DepthCentimetres, string? Name = null);
+public sealed record TransportPlanContract(string Summary, IReadOnlyCollection<TransportLegContract> Legs);
+public sealed record TransportLegContract(int Type, string From, string To, int EstimatedMinutes, string Description);
 
 public sealed record ChecklistItemResponse(Guid Id, Guid TripId, Guid? ProfileId, int Category, string Name, bool IsPacked);

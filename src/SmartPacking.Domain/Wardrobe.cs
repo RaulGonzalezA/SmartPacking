@@ -1,12 +1,60 @@
 namespace SmartPacking.Domain;
 
-public enum ClothingType { TShirt, Trousers, Shorts, Jacket, Shoes, Sandals, Accessory }
+public enum ClothingType { TShirt, Trousers, Shorts, Jacket, Shoes, Sandals, Accessory, Shirt, Sweater, Hoodie, Coat, Dress, Skirt, Underwear, Socks, Swimwear, Pyjamas, Belt, Bag }
 public enum Season { Summer, Winter, MidSeason, AllYear }
 public enum Style { Casual, Formal, Sport }
 public enum TripActivity { Sightseeing, Beach, Hiking, Business, FormalEvent, Sport, Nightlife, Relaxation }
 public enum LuggageType { Backpack, Cabin, Checked }
 public enum TransportType { Car, Plane, Train, Bus, Cruise }
 public sealed record TransportOption(TransportType Type, bool IsAvailable, string Reason);
+public sealed record TransportLeg(TransportType Type, string From, string To, int EstimatedMinutes, string Description);
+public sealed record TransportPlan(string Summary, IReadOnlyCollection<TransportLeg> Legs);
+
+public static class TransportPlanner
+{
+    public static TransportPlan Build(string? origin, string destination, IReadOnlyCollection<TransportType>? transportTypes)
+    {
+        var selected = transportTypes ?? [];
+        var originName = string.IsNullOrWhiteSpace(origin) ? "Origen por confirmar" : origin.Trim();
+        var destinationName = destination.Trim();
+        if (selected.Contains(TransportType.Plane) && TransportAdvisor.GetOptions(originName, destinationName).Any(option => option.Type == TransportType.Plane && option.IsAvailable))
+        {
+            var departureAirport = AirportFor(originName);
+            var arrivalAirport = AirportFor(destinationName);
+            var transferMinutes = TransferMinutes(originName);
+            var legs = new List<TransportLeg>();
+            if (transferMinutes > 0)
+            {
+                legs.Add(new(TransportType.Car, originName, departureAirport, transferMinutes, "Traslado recomendado al aeropuerto de salida."));
+            }
+
+            legs.Add(new(TransportType.Plane, departureAirport, arrivalAirport, FlightMinutes(departureAirport, arrivalAirport), "Vuelo estimado; confirma horario y vuelo directo al reservar."));
+            return new($"{originName} → {departureAirport} → {arrivalAirport}", legs);
+        }
+
+        if (selected.Contains(TransportType.Train) && TransportAdvisor.GetOptions(originName, destinationName).Any(option => option.Type == TransportType.Train && option.IsAvailable))
+        {
+            return new($"Tren desde {originName} hasta {destinationName}", [new(TransportType.Train, originName, destinationName, TrainMinutes(originName, destinationName), "Conexión ferroviaria orientativa; confirma transbordos y horarios.")]);
+        }
+
+        var mode = selected.Contains(TransportType.Bus) ? TransportType.Bus : TransportType.Car;
+        return new($"{TransportName(mode)} desde {originName} hasta {destinationName}", [new(mode, originName, destinationName, 0, "Trayecto orientativo. Consulta duración y paradas antes de salir.")]);
+    }
+
+    private static string AirportFor(string place) => Normalize(place) switch
+    {
+        var value when value.Contains("OCAÑA") || value.Contains("MADRID") => "Madrid-Barajas",
+        var value when value.Contains("ROMA") => "Roma Fiumicino",
+        var value when value.Contains("BARCELONA") => "Barcelona-El Prat",
+        var value when value.Contains("MALAGA") => "Málaga-Costa del Sol",
+        _ => place
+    };
+    private static int TransferMinutes(string place) => Normalize(place).Contains("OCAÑA") ? 55 : 0;
+    private static int FlightMinutes(string departure, string arrival) => departure.Contains("Madrid", StringComparison.OrdinalIgnoreCase) && arrival.Contains("Roma", StringComparison.OrdinalIgnoreCase) ? 150 : 120;
+    private static int TrainMinutes(string origin, string destination) => Normalize(origin).Contains("MEDINA DEL CAMPO") && Normalize(destination).Contains("MADRID") ? 75 : 120;
+    private static string TransportName(TransportType type) => type == TransportType.Bus ? "Autobús" : "Coche";
+    private static string Normalize(string place) => place.Trim().ToUpperInvariant();
+}
 
 public static class TransportAdvisor
 {
@@ -98,7 +146,12 @@ public sealed record ClothingItem(
     Guid? OwnerProfileId = null,
     string? PhotoUrl = null);
 
-public sealed record UserProfile(Guid Id, string Name, bool IsOnboarded, string? Address = null);
+public sealed record UserAddress(string? Street, string? PostalCode, string? City, string? Region)
+{
+    public string? DisplayAddress => string.Join(" · ", new[] { Street, PostalCode, City, Region }.Where(value => !string.IsNullOrWhiteSpace(value)));
+}
+
+public sealed record UserProfile(Guid Id, string Name, bool IsOnboarded, string? Address = null, UserAddress? AddressDetails = null);
 public sealed record FamilyProfile(Guid Id, string Name, bool IsArchived = false, string? PackingNotes = null, string? MedicalNotes = null);
 
 public sealed record PackingList(Guid Id, Guid TripId, Guid UserId, DateTimeOffset CreatedAt, IReadOnlyCollection<PackingListItem> Items);
@@ -127,7 +180,8 @@ public sealed record Trip(
     string? AirlineCode = null,
     IReadOnlyCollection<TransportType>? TransportTypes = null,
     IReadOnlyCollection<TripLuggage>? Luggages = null,
-    string? Origin = null)
+    string? Origin = null,
+    TransportPlan? TransportPlan = null)
 {
     public int Days => EndDate.DayNumber - StartDate.DayNumber + 1;
     public TripStatus GetStatus(DateOnly today)

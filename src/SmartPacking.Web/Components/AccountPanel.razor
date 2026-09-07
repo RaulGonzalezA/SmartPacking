@@ -30,9 +30,10 @@
                 <h3>Perfil</h3>
                 <label for="account-name">Nombre</label>
                 <input id="account-name" maxlength="80" autocomplete="name" @bind="name" disabled="@IsBusy" />
-                <label for="account-address">Dirección o ciudad de salida habitual</label>
-                <input id="account-address" maxlength="160" autocomplete="street-address" placeholder="Ej. Ocaña, Toledo" @bind="address" disabled="@IsBusy" />
+                <ValidationMessage Field="name" Errors="validationErrors" />
+                <fieldset class="address-fields"><legend>Dirección habitual de salida</legend><label for="account-street">Calle y número</label><input id="account-street" maxlength="80" autocomplete="street-address" placeholder="Calle Mayor, 12, 2º B" @bind="street" disabled="@IsBusy" /><ValidationMessage Field="street" Errors="validationErrors" /><label for="account-postal-code">Código postal</label><input id="account-postal-code" maxlength="12" autocomplete="postal-code" placeholder="45300" @bind="postalCode" disabled="@IsBusy" /><ValidationMessage Field="postalCode" Errors="validationErrors" /><label for="account-city">Población</label><input id="account-city" maxlength="60" autocomplete="address-level2" placeholder="Ocaña" @bind="city" disabled="@IsBusy" /><ValidationMessage Field="city" Errors="validationErrors" /><label for="account-region">Provincia y país</label><input id="account-region" maxlength="80" autocomplete="address-level1" placeholder="Toledo, España" @bind="region" disabled="@IsBusy" /><ValidationMessage Field="region" Errors="validationErrors" /></fieldset>
                 <button type="button" disabled="@IsBusy" @onclick="SaveAsync">Guardar perfil</button>
+                <ValidationMessage Field="form" Errors="validationErrors" />
             </section>
 
             <section class="account-section account-danger-section">
@@ -53,42 +54,106 @@
 @code {
     private bool isOpen;
     private string name = string.Empty;
-    private string address = string.Empty;
+    private string street = string.Empty;
+    private string postalCode = string.Empty;
+    private string city = string.Empty;
+    private string region = string.Empty;
     private string deletionConfirmation = string.Empty;
     private string? error;
+    private IReadOnlyDictionary<string, string[]> validationErrors = new Dictionary<string, string[]>();
 
     [Parameter, EditorRequired] public UserProfile User { get; set; } = new(Guid.Empty, string.Empty, false);
     [Parameter] public string? Email { get; set; }
     [Parameter] public bool IsEmailVerified { get; set; }
     [Parameter] public bool IsBusy { get; set; }
-    [Parameter, EditorRequired] public EventCallback<UserProfile> UserUpdated { get; set; }
+    [Parameter, EditorRequired] public Func<UserProfile, Task<IReadOnlyDictionary<string, string[]>>>? UserUpdated { get; set; }
     [Parameter, EditorRequired] public EventCallback AccountDeleted { get; set; }
 
     protected override void OnParametersSet()
     {
         name = User.Name;
-        address = User.Address ?? string.Empty;
+        if (!isOpen)
+        {
+            LoadAddress();
+        }
     }
 
-    private void Open() => isOpen = true;
-    private void Close() { isOpen = false; error = null; deletionConfirmation = string.Empty; }
+    private void Open()
+    {
+        LoadAddress();
+        isOpen = true;
+    }
+    private void Close() { isOpen = false; error = null; validationErrors = new Dictionary<string, string[]>(); deletionConfirmation = string.Empty; }
 
     private async Task SaveAsync()
     {
-        var normalizedName = name.Trim();
-        if (string.IsNullOrWhiteSpace(normalizedName))
+        error = null;
+        validationErrors = Validate();
+        if (validationErrors.Count > 0)
         {
-            error = "Escribe un nombre para guardarlo.";
             return;
         }
 
-        error = null;
-        await UserUpdated.InvokeAsync(User with { Name = normalizedName, Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim() });
+        var normalizedName = name.Trim();
+        var address = new UserAddress(EmptyToNull(street), EmptyToNull(postalCode), EmptyToNull(city), EmptyToNull(region));
+        UserAddress? addressDetails = address.DisplayAddress is null ? null : address;
+        var updatedUser = User with { Name = normalizedName, Address = address.DisplayAddress, AddressDetails = addressDetails };
+        validationErrors = UserUpdated is null
+            ? new Dictionary<string, string[]> { ["form"] = ["No se pudo guardar el perfil. Inténtalo de nuevo."] }
+            : await UserUpdated(updatedUser);
+        if (validationErrors.Count > 0)
+        {
+            return;
+        }
+
+        Close();
     }
 
     private async Task DeleteAsync()
     {
         error = null;
         await AccountDeleted.InvokeAsync();
+    }
+
+    private void LoadAddress()
+    {
+        if (User.AddressDetails is { } details)
+        {
+            street = details.Street ?? string.Empty;
+            postalCode = details.PostalCode ?? string.Empty;
+            city = details.City ?? string.Empty;
+            region = details.Region ?? string.Empty;
+            return;
+        }
+
+        var parts = (User.Address ?? string.Empty).Split(" · ", StringSplitOptions.TrimEntries);
+        street = parts.ElementAtOrDefault(0) ?? string.Empty;
+        postalCode = parts.ElementAtOrDefault(1) ?? string.Empty;
+        city = parts.ElementAtOrDefault(2) ?? string.Empty;
+        region = parts.ElementAtOrDefault(3) ?? string.Empty;
+    }
+
+    private static string? EmptyToNull(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private IReadOnlyDictionary<string, string[]> Validate()
+    {
+        var errors = new Dictionary<string, string[]>();
+        AddErrorIf(errors, "name", string.IsNullOrWhiteSpace(name), "Escribe un nombre para guardarlo.");
+        AddErrorIf(errors, "name", name.Trim().Length > 80, "El nombre no puede superar 80 caracteres.");
+        AddErrorIf(errors, "street", street.Trim().Length > 80, "La calle no puede superar 80 caracteres.");
+        AddErrorIf(errors, "postalCode", postalCode.Trim().Length > 12, "El código postal no puede superar 12 caracteres.");
+        AddErrorIf(errors, "city", city.Trim().Length > 60, "La población no puede superar 60 caracteres.");
+        AddErrorIf(errors, "region", region.Trim().Length > 80, "La provincia y el país no pueden superar 80 caracteres.");
+        var hasAddress = new[] { street, postalCode, city, region }.Any(value => !string.IsNullOrWhiteSpace(value));
+        AddErrorIf(errors, "city", hasAddress && string.IsNullOrWhiteSpace(city), "La población es obligatoria cuando se informa una dirección.");
+        return errors;
+    }
+
+    private static void AddErrorIf(IDictionary<string, string[]> errors, string field, bool condition, string message)
+    {
+        if (condition)
+        {
+            errors[field] = [message];
+        }
     }
 }

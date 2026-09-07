@@ -32,10 +32,23 @@ public sealed class PanelRenderingTests : BunitContext
 
         await cut.FindAll("button").Single(button => button.TextContent == "Mi cuenta").ClickAsync();
         cut.FindAll("button").Single(button => button.TextContent == "Eliminar mis datos").HasAttribute("disabled").Should().BeTrue();
-        await cut.FindAll("input")[1].ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "ELIMINAR" });
+        await cut.Find("#delete-account").ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "ELIMINAR" });
         await cut.FindAll("button").Single(button => button.TextContent == "Eliminar mis datos").ClickAsync();
 
         deleted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AccountPanelShowsTheSameCityRequirementAsTheApi()
+    {
+        var cut = Render<AccountPanel>(parameters => parameters
+            .Add(component => component.User, new UserProfile(Guid.NewGuid(), "Lucía", true)));
+
+        await cut.FindAll("button").Single(button => button.TextContent == "Mi cuenta").ClickAsync();
+        await cut.Find("#account-street").ChangeAsync(new ChangeEventArgs { Value = "Calle Mayor, 12" });
+        await cut.FindAll("button").Single(button => button.TextContent == "Guardar perfil").ClickAsync();
+
+        cut.Markup.Should().Contain("La población es obligatoria cuando se informa una dirección.");
     }
 
     [Fact]

@@ -8,6 +8,28 @@ namespace SmartPacking.Application.Tests;
 public sealed class PackingRecommendationServiceTests
 {
     [Fact]
+    public void TransportPlannerBuildsAirportTransferForOcanaToRome()
+    {
+        var plan = TransportPlanner.Build("Ocaña, Toledo", "Roma", [TransportType.Plane]);
+        var legs = plan.Legs.ToArray();
+
+        plan.Legs.Should().HaveCount(2);
+        legs[0].Should().BeEquivalentTo(new TransportLeg(TransportType.Car, "Ocaña, Toledo", "Madrid-Barajas", 55, "Traslado recomendado al aeropuerto de salida."));
+        legs[1].Type.Should().Be(TransportType.Plane);
+        legs[1].To.Should().Be("Roma Fiumicino");
+    }
+
+    [Fact]
+    public void TransportPlannerBuildsRailPlanFromMedinaDelCampoToMadrid()
+    {
+        var plan = TransportPlanner.Build("Medina del Campo", "Madrid", [TransportType.Train]);
+        var leg = plan.Legs.Single();
+
+        plan.Legs.Should().ContainSingle();
+        leg.Should().BeEquivalentTo(new TransportLeg(TransportType.Train, "Medina del Campo", "Madrid", 75, "Conexión ferroviaria orientativa; confirma transbordos y horarios."));
+    }
+
+    [Fact]
     public void TransportAdvisorExplainsAirportTransferFromOcanaToRome()
     {
         var options = TransportAdvisor.GetOptions("Ocaña, Toledo", "Roma");

@@ -9,7 +9,7 @@ namespace SmartPacking.Web.Components;
 public partial class TripsPanel
 {
     private static readonly Guid DefaultProfileId = Guid.Parse("90ae4435-5a54-42dc-a0a4-4f8aa4d96f90");
-    private readonly TripFormInput newTrip = new();
+    private TripFormInput newTrip = new();
     private readonly TripFormInput editTrip = new();
     private readonly HashSet<Guid> tripProfileIds = [];
     private readonly HashSet<Guid> usedItemIds = [];
@@ -17,6 +17,7 @@ public partial class TripsPanel
     private bool editCreatedTrip;
     private bool showTravellerForm;
     private bool confirmTripDeletion;
+    private string? lastDefaultOrigin;
     private Guid? confirmTravellerArchiveId;
     private Trip? editingTrip;
     private Guid synchronizedTripId;
@@ -55,10 +56,11 @@ public partial class TripsPanel
 
     protected override void OnParametersSet()
     {
-        if (string.IsNullOrWhiteSpace(newTrip.Origin))
+        if (string.IsNullOrWhiteSpace(newTrip.Origin) || string.Equals(newTrip.Origin, lastDefaultOrigin, StringComparison.Ordinal))
         {
             newTrip.Origin = DefaultOrigin;
         }
+        lastDefaultOrigin = DefaultOrigin;
         if (synchronizedTripId != SelectedTripId) { synchronizedTripId = SelectedTripId; tripProfileIds.Clear(); tripProfileIds.UnionWith(TripProfiles.Select(profile => profile.Id)); }
         if (!ReferenceEquals(synchronizedUsageItemIds, UsedItemIds)) { synchronizedUsageItemIds = UsedItemIds; usedItemIds.Clear(); usedItemIds.UnionWith(UsedItemIds); }
         if (editCreatedTrip && SelectedTripId != Guid.Empty && Trips.Any(trip => trip.Id == SelectedTripId))
@@ -88,6 +90,11 @@ public partial class TripsPanel
         await Created.InvokeAsync(newTrip);
         showTripForm = false;
         editCreatedTrip = true;
+    }
+    private void CancelNewTrip()
+    {
+        showTripForm = false;
+        newTrip = new TripFormInput { Origin = DefaultOrigin };
     }
     private void StartEditingTrip() { editingTrip = Trips.SingleOrDefault(trip => trip.Id == SelectedTripId); if (editingTrip is not null) editTrip.CopyFrom(editingTrip); }
     private void CancelEditingTrip() => editingTrip = null;
@@ -141,5 +148,6 @@ public partial class TripsPanel
     private void CancelConfirmation() { confirmTripDeletion = false; confirmTravellerArchiveId = null; }
     private static string LuggageTypeName(LuggageType type) => type switch { LuggageType.Backpack => "Mochila", LuggageType.Cabin => "Cabina", _ => "Facturada" };
     private static string TransportSummary(Trip trip) => trip.TransportTypesOrEmpty.Count == 0 ? "🚗 Transporte por decidir" : string.Join(" · ", trip.TransportTypesOrEmpty.Select(type => type switch { TransportType.Car => "🚗 Coche", TransportType.Plane => "✈️ Avión", TransportType.Train => "🚆 Tren", TransportType.Bus => "🚌 Autobús", _ => "🛳️ Barco" }));
+    private static string TransportIcon(TransportType type) => type switch { TransportType.Car => "🚗", TransportType.Plane => "✈️", TransportType.Train => "🚆", TransportType.Bus => "🚌", _ => "🛳️" };
     private static string ActivityName(TripActivity activity) => activity switch { TripActivity.Sightseeing => "Turismo", TripActivity.Beach => "Playa", TripActivity.Hiking => "Senderismo", TripActivity.Business => "Negocios", TripActivity.FormalEvent => "Evento formal", TripActivity.Sport => "Deporte", TripActivity.Nightlife => "Ocio nocturno", _ => "Relax" };
 }

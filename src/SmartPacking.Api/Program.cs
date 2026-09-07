@@ -16,7 +16,7 @@ builder.Services
     .AddSmartPackingApplication()
     .AddSmartPackingPersistence(builder.Configuration)
     .AddSmartPackingCache(builder.Configuration)
-    .AddSmartPackingExternalServices()
+    .AddSmartPackingExternalServices(builder.Configuration)
     .AddSmartPackingPhotoStorage(builder.Configuration)
     .AddSmartPackingHealthChecks();
 

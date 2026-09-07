@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
 using SmartPacking.Application;
+using SmartPacking.Api.Validation;
 using SmartPacking.Domain;
 
 namespace SmartPacking.Api.Controllers;
 
 [ApiController]
 [Route("api")]
-public sealed class SystemController(ISmartPackingStore store) : ControllerBase
+public sealed class SystemController(ISmartPackingStore store, IValidator<CompleteUserOnboardingRequest> onboardingValidator, IValidator<UpdateCurrentUserRequest> updateValidator) : ControllerBase
 {
     [HttpGet("me")]
     public async Task<IActionResult> GetCurrentUserAsync(CancellationToken cancellationToken) => Ok(await store.GetDefaultUserAsync(cancellationToken));
@@ -16,17 +18,14 @@ public sealed class SystemController(ISmartPackingStore store) : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<UserProfile>> CompleteOnboardingAsync(CompleteUserOnboardingRequest request, CancellationToken cancellationToken)
     {
-        var name = request.Name?.Trim();
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 80)
+        var validationProblem = await onboardingValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]>
-            {
-                ["name"] = ["Escribe un nombre de entre 1 y 80 caracteres."]
-            }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        return Ok(await store.CompleteUserOnboardingAsync(user.Id, name, cancellationToken));
+        return Ok(await store.CompleteUserOnboardingAsync(user.Id, request.Name.Trim(), cancellationToken));
     }
 
     [HttpPut("me")]
@@ -35,26 +34,15 @@ public sealed class SystemController(ISmartPackingStore store) : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UserProfile>> UpdateCurrentUserAsync(UpdateCurrentUserRequest request, CancellationToken cancellationToken)
     {
-        var name = request.Name?.Trim();
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 80)
+        var validationProblem = await updateValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]>
-            {
-                ["name"] = ["Escribe un nombre de entre 1 y 80 caracteres."]
-            }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var address = request.Address?.Trim();
-        if (address?.Length > 160)
-        {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]>
-            {
-                ["address"] = ["La dirección o ciudad de salida no puede superar 160 caracteres."]
-            }));
-        }
-
-        var updated = await store.UpdateUserProfileAsync(user.Id, name, address, cancellationToken);
+        var address = new UserAddress(request.Street?.Trim(), request.PostalCode?.Trim(), request.City?.Trim(), request.Region?.Trim());
+        var updated = await store.UpdateUserProfileAsync(user.Id, request.Name.Trim(), address.DisplayAddress is null ? null : address, cancellationToken);
         return updated is null
             ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Usuario no encontrado")
             : Ok(updated);
