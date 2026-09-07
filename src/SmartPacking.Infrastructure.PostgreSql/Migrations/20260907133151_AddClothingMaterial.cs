@@ -1,21 +1,19 @@
-using Microsoft.EntityFrameworkCore.Migrations;
-
-#pragma warning disable IDE0161
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace SmartPacking.Infrastructure.Migrations
+namespace SmartPacking.Infrastructure.PostgreSql.Migrations
 {
     /// <inheritdoc />
-    public partial class AddPersistedTransportPlan : Migration
+    public partial class AddClothingMaterial : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
-                name: "TransportPlan",
-                table: "Trips",
-                type: "TEXT",
+                name: "Material",
+                table: "ClothingItems",
+                type: "text",
                 nullable: true);
         }
 
@@ -23,8 +21,8 @@ namespace SmartPacking.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "TransportPlan",
-                table: "Trips");
+                name: "Material",
+                table: "ClothingItems");
         }
     }
 }

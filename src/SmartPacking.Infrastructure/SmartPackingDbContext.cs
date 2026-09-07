@@ -87,6 +87,7 @@ public sealed class ClothingItemEntity
     public bool IsDeleted { get; set; }
     public Guid? OwnerProfileId { get; set; }
     public string? PhotoUrl { get; set; }
+    public string? Material { get; set; }
     public string CombinationIds { get; set; } = "[]";
 }
 public sealed class TripEntity

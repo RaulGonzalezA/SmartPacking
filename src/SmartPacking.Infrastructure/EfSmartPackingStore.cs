@@ -549,9 +549,10 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         IsDeleted = item.IsDeleted,
         OwnerProfileId = item.OwnerProfileId,
         PhotoUrl = item.PhotoUrl,
+        Material = item.Material,
         CombinationIds = JsonSerializer.Serialize(item.CombinesWith)
     };
-    private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId, item.PhotoUrl);
+    private static ClothingItem ToDomain(ClothingItemEntity item) => new(item.Id, item.Name, (ClothingType)item.Type, (Season)item.Season, item.Color, item.WarmthLevel, item.Waterproof, (Style)item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, JsonSerializer.Deserialize<Guid[]>(item.CombinationIds) ?? [], item.IsDeleted, item.OwnerProfileId, item.PhotoUrl, item.Material);
     private static FamilyProfile ToDomain(FamilyProfileEntity profile) => new(profile.Id, profile.Name, profile.IsArchived, profile.PackingNotes, profile.MedicalNotes);
     private static UserProfile ToDomain(UserEntity user)
     {

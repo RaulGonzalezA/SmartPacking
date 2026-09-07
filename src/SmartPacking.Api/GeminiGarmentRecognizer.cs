@@ -48,10 +48,34 @@ public sealed partial class GeminiGarmentRecognizer(HttpClient httpClient, IConf
             .SelectMany(step => step.GetProperty("content").EnumerateArray())
             .First(part => part.GetProperty("type").GetString() == "text")
             .GetProperty("text").GetString();
-        var suggestion = JsonSerializer.Deserialize<GarmentRecognitionSuggestion>(text ?? string.Empty, JsonOptions);
-        return suggestion ?? throw new InvalidOperationException("Gemini no devolvió una propuesta válida.");
+        var suggestion = JsonSerializer.Deserialize<GarmentRecognitionSuggestion>(text ?? string.Empty, JsonOptions)
+            ?? throw new InvalidOperationException("Gemini no devolvió una propuesta válida.");
+        return Normalize(suggestion);
     }
 
     [LoggerMessage(LogLevel.Warning, "Gemini rechazó el reconocimiento con estado {StatusCode}. Detalle: {Detail}")]
     private static partial void LogGeminiFailure(ILogger logger, System.Net.HttpStatusCode statusCode, string detail);
+
+    private static GarmentRecognitionSuggestion Normalize(GarmentRecognitionSuggestion value)
+    {
+        var categories = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Camiseta", "Camisa", "Jersey", "Sudadera", "Abrigo", "Chaqueta", "Vestido", "Falda", "Pantalón", "Pantalón corto", "Ropa interior", "Calcetines", "Bañador", "Pijama", "Cinturón", "Bolso", "Zapatos", "Sandalias", "Accesorio" };
+        var categoryCandidate = value.Category?.Trim();
+        var category = categories.Contains(categoryCandidate ?? string.Empty) ? categoryCandidate! : "Accesorio";
+        var seasons = (value.Seasons ?? []).Where(season => season is "Primavera" or "Verano" or "Otoño" or "Invierno").Distinct().ToArray();
+        var style = value.Style is "Casual" or "Formal" or "Deportivo" ? value.Style : "Casual";
+        var suitableFor = (value.SuitableFor ?? [])
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct()
+            .Take(5)
+            .ToArray();
+
+        return new(
+            category,
+            string.IsNullOrWhiteSpace(value.Color) ? "Sin especificar" : value.Color.Trim(),
+            string.IsNullOrWhiteSpace(value.Material) ? null : value.Material.Trim(),
+            seasons,
+            style,
+            Math.Clamp(value.EstimatedWeightGrams, 20, 5000),
+            suitableFor);
+    }
 }

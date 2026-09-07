@@ -144,7 +144,8 @@ public sealed record ClothingItem(
     IReadOnlyCollection<Guid> CombinesWith,
     bool IsDeleted = false,
     Guid? OwnerProfileId = null,
-    string? PhotoUrl = null);
+    string? PhotoUrl = null,
+    string? Material = null);
 
 public sealed record UserAddress(string? Street, string? PostalCode, string? City, string? Region)
 {

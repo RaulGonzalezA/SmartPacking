@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #pragma warning disable IDE0161, CA1861 // EF Core scaffolds migration syntax and constant column arrays.

@@ -12,6 +12,8 @@ public sealed record WeatherForecast(string Destination, decimal MinimumCelsius,
 
 public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDistributedCache cache, ILogger<OpenMeteoWeatherProvider> logger)
 {
+    private const string Espanha = "España";
+
     public async Task<IReadOnlyList<CitySuggestion>> SearchCitiesAsync(string query, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 3)
@@ -142,10 +144,10 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
     {
         var cities = new[]
         {
-            new CitySuggestion("Toledo", "España", "Castilla-La Mancha"), new CitySuggestion("Tolosa", "España", "Gipuzkoa"), new CitySuggestion("Toluca", "México", "Estado de México"),
-            new CitySuggestion("Madrid", "España", "Comunidad de Madrid"), new CitySuggestion("Madridejos", "España", "Castilla-La Mancha"), new CitySuggestion("Madras", "India", "Tamil Nadu"),
+            new CitySuggestion("Toledo", Espanha, "Castilla-La Mancha"), new CitySuggestion("Tolosa", Espanha, "Gipuzkoa"), new CitySuggestion("Toluca", "México", "Estado de México"),
+            new CitySuggestion("Madrid", Espanha, "Comunidad de Madrid"), new CitySuggestion("Madridejos", Espanha, "Castilla-La Mancha"), new CitySuggestion("Madras", "India", "Tamil Nadu"),
             new CitySuggestion("Washington, D.C.", "Estados Unidos", null), new CitySuggestion("Londres", "Reino Unido", "Inglaterra"), new CitySuggestion("Londrina", "Brasil", "Paraná"),
-            new CitySuggestion("Barcelona", "España", "Cataluña"), new CitySuggestion("Valencia", "España", "Comunidad Valenciana"), new CitySuggestion("Roma", "Italia", "Lacio"), new CitySuggestion("París", "Francia", "Isla de Francia")
+            new CitySuggestion("Barcelona", Espanha, "Cataluña"), new CitySuggestion("Valencia", Espanha, "Comunidad Valenciana"), new CitySuggestion("Roma", "Italia", "Lacio"), new CitySuggestion("París", "Francia", "Isla de Francia")
         };
         return cities.Where(city => city.DisplayName.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase)).Take(10).ToArray();
     }

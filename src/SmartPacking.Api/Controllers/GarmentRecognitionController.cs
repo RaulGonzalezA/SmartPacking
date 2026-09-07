@@ -18,18 +18,18 @@ public sealed class GarmentRecognitionController(IGarmentRecognizer garmentRecog
         {
             return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["photo"] = ["Selecciona una foto JPEG de hasta 5 MB."] }));
         }
-        try 
-        { 
-            await using var stream = photo.OpenReadStream(); 
-            return Ok(await garmentRecognizer.RecognizeAsync(stream, photo.ContentType, cancellationToken)); 
+        try
+        {
+            await using var stream = photo.OpenReadStream();
+            return Ok(await garmentRecognizer.RecognizeAsync(stream, photo.ContentType, cancellationToken));
         }
-        catch (InvalidOperationException exception) 
-        { 
-            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Reconocimiento no disponible", detail: exception.Message); 
+        catch (InvalidOperationException exception)
+        {
+            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Reconocimiento no disponible", detail: exception.Message);
         }
-        catch (HttpRequestException) 
-        { 
-            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Reconocimiento no disponible", detail: "No se ha podido analizar la imagen. Inténtalo de nuevo."); 
+        catch (HttpRequestException)
+        {
+            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Reconocimiento no disponible", detail: "No se ha podido analizar la imagen. Inténtalo de nuevo.");
         }
     }
 }

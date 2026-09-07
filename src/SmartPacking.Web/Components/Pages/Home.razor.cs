@@ -245,9 +245,9 @@ public partial class Home : ComponentBase, IDisposable
     private Task SaveTravellersAsync(IReadOnlyCollection<Guid> ids) => RunAsync(async () => { await Api.SetTripProfilesAsync(State.SelectedTripId, ids, CancellationToken.None); State.Feedback = "Viajeros guardados."; await LoadTripAsync(); });
     private Task SaveTravellerAsync(FamilyProfile profile) => RunAsync(async () => { await Api.UpdateProfileAsync(profile.Id, profile.Name, profile.PackingNotes, profile.MedicalNotes, CancellationToken.None); State.Feedback = "Viajero actualizado."; await LoadAsync(); });
     private Task ArchiveTravellerAsync(Guid id) => RunAsync(async () => { await Api.ArchiveProfileAsync(id, CancellationToken.None); State.Feedback = "Viajero archivado. Sus maletas anteriores se conservan."; await LoadAsync(); });
-    private Task CreateClothingAsync(string name, string color, Guid ownerId, ClothingType type, int weightGrams, IBrowserFile? file) => RunAsync(async () =>
+    private Task CreateClothingAsync(string name, string color, Guid ownerId, ClothingType type, Season season, Style style, string? material, int weightGrams, IBrowserFile? file) => RunAsync(async () =>
     {
-        var item = await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), name, type, Season.AllYear, color, 2, false, Style.Casual, weightGrams, true, true, 70, [], false, ownerId), CancellationToken.None);
+        var item = await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), name, type, season, color, 2, false, style, weightGrams, true, true, 70, [], false, ownerId, null, material), CancellationToken.None);
         if (file is not null)
         {
             await UploadClothingPhotoAsync(item.Id, file);

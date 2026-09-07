@@ -136,7 +136,8 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
             item.IsAvailable,
             item.PreferenceScore,
             item.CombinesWith,
-            item.OwnerProfileId
+            item.OwnerProfileId,
+            item.Material
         }, cancellationToken);
         var result = await response.Content.ReadFromJsonAsync<ApiResult<ClothingItemDto>>(cancellationToken);
         return result?.Data.ToDomain() ?? throw new InvalidOperationException("La API no devolvió la prenda creada.");
@@ -195,9 +196,9 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
         return Task.CompletedTask;
     }
 
-    private sealed record ClothingItemDto(Guid Id, string Name, ClothingType Type, Season Season, string Color, int WarmthLevel, bool Waterproof, Style Style, int? WeightGrams, bool IsClean, bool IsAvailable, int PreferenceScore, IReadOnlyCollection<Guid> CombinesWith, bool IsDeleted, Guid? OwnerProfileId, string? PhotoUrl)
+    private sealed record ClothingItemDto(Guid Id, string Name, ClothingType Type, Season Season, string Color, int WarmthLevel, bool Waterproof, Style Style, int? WeightGrams, bool IsClean, bool IsAvailable, int PreferenceScore, IReadOnlyCollection<Guid> CombinesWith, bool IsDeleted, Guid? OwnerProfileId, string? PhotoUrl, string? Material = null)
     {
-        public ClothingItem ToDomain() => new(Id, Name, Type, Season, Color, WarmthLevel, Waterproof, Style, WeightGrams, IsClean, IsAvailable, PreferenceScore, CombinesWith, IsDeleted, OwnerProfileId, PhotoUrl);
+        public ClothingItem ToDomain() => new(Id, Name, Type, Season, Color, WarmthLevel, Waterproof, Style, WeightGrams, IsClean, IsAvailable, PreferenceScore, CombinesWith, IsDeleted, OwnerProfileId, PhotoUrl, Material);
     }
 
     private static Trip ToTrip(TripResponse trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, trip.Activities.Select(activity => (Style)activity).ToArray(), trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (LuggageType)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, trip.DayPlans?.Select(plan => new TripDayPlan(plan.Date, plan.Activities.Select(activity => (TripActivity)activity).ToArray())).ToArray(), trip.AirlineCode, trip.TransportTypes?.Select(type => (TransportType)type).ToArray(), trip.Luggages?.Select(luggage => new TripLuggage(luggage.Id, (LuggageType)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray(), trip.Origin, trip.TransportPlan is null ? null : new TransportPlan(trip.TransportPlan.Summary, trip.TransportPlan.Legs.Select(leg => new TransportLeg((TransportType)leg.Type, leg.From, leg.To, leg.EstimatedMinutes, leg.Description)).ToArray()));
