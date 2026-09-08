@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -35,9 +36,25 @@ if (authenticationEnabled)
         options.Scope.Add("openid");
         options.Scope.Add("profile");
         options.Scope.Add("email");
+        options.Scope.Add("admin:users");
+        options.Scope.Add("admin:plans");
+        options.Scope.Add("admin:credits");
+        options.Scope.Add("admin:billing");
+        options.Scope.Add("admin:audit");
         options.ClaimActions.MapUniqueJsonKey("email_verified", "email_verified");
         options.ClaimActions.MapJsonKey("permissions", "permissions");
         options.ClaimActions.MapJsonKey("permissions", "https://smartpacking.app/permissions");
+        options.ClaimActions.MapJsonKey(System.Security.Claims.ClaimTypes.Role, "roles");
+        options.ClaimActions.MapJsonKey(System.Security.Claims.ClaimTypes.Role, "https://smartpacking.app/roles");
+        options.Events.OnTokenValidated = context =>
+        {
+            if (context.Principal?.Identity is System.Security.Claims.ClaimsIdentity identity)
+            {
+                Auth0AccessTokenPermissions.AddTo(identity, context.TokenEndpointResponse?.AccessToken);
+            }
+
+            return Task.CompletedTask;
+        };
         options.Events.OnRedirectToIdentityProvider = context =>
         {
             context.ProtocolMessage.SetParameter("audience", audience);
@@ -53,6 +70,7 @@ if (authenticationEnabled)
     builder.Services.AddAuthorization();
 }
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "data-protection-keys")));
 var apiBaseUrl = builder.Configuration["Api:BaseUrl"] ?? throw new InvalidOperationException("La configuración Api:BaseUrl es obligatoria.");
 builder.Services.AddHttpContextAccessor();

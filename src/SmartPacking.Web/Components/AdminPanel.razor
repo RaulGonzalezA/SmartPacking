@@ -3,43 +3,141 @@
 
 @if (IsActive)
 {
-    <section class="family-section">
-        <header class="page-section-header"><div><p class="type">Administración</p><h1>Usuarios y suscripciones</h1></div><button @onclick="LoadAsync">Actualizar</button></header>
-        @if (!string.IsNullOrWhiteSpace(error)) { <p class="feedback error">@error</p> }
-        @if (users is not null)
+    <section class="admin-dashboard" aria-labelledby="admin-heading">
+        <header class="admin-hero">
+            <div>
+                <p class="type">Área protegida</p>
+                <h1 id="admin-heading">Administración</h1>
+                <p>Gestiona usuarios, planes, créditos y la actividad reciente de SmartPacking.</p>
+            </div>
+            <button class="secondary admin-refresh" disabled="@isLoading" @onclick="LoadAsync">@(isLoading ? "Actualizando…" : "↻ Actualizar")</button>
+        </header>
+
+        <section class="admin-permissions" aria-label="Permisos de esta sesión">
+            <span class="admin-permissions-label">Tu acceso</span>
+            <div class="admin-permission-list">
+                <span class="admin-permission @(CanManageUsers ? "enabled" : "disabled")">👥 Usuarios</span>
+                <span class="admin-permission @(CanManagePlans ? "enabled" : "disabled")">✦ Planes</span>
+                <span class="admin-permission @(CanManageCredits ? "enabled" : "disabled")">◈ Créditos</span>
+                <span class="admin-permission @(CanViewBilling ? "enabled" : "disabled")">◌ Facturación</span>
+                <span class="admin-permission @(CanViewAudit ? "enabled" : "disabled")">◷ Auditoría</span>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(error))
         {
-            <div class="cards">@foreach (var user in users) { <article class="card"><div><h3>@(string.IsNullOrWhiteSpace(user.Name) ? "Sin onboarding" : user.Name)</h3><p class="muted">@user.AiPlan · @user.AiRecognitionCredits créditos · @(user.IsOnboarded ? "Activo" : "Pendiente")</p></div><div class="quick-form">@if (CanManagePlans) { <button class="secondary" @onclick="() => SetPlanAsync(user.Id, TargetPlan(user.AiPlan))">Cambiar a @TargetPlan(user.AiPlan)</button> } @if (CanManageCredits) { <button class="secondary" @onclick="() => AddCreditsAsync(user.Id)">+10 créditos</button> }</div></article> }</div>
+            <p class="feedback error" role="alert">@error</p>
+        }
+
+        <section class="admin-summary" aria-label="Resumen administrativo">
+            <article><span>👥</span><div><strong>@(users?.Count.ToString() ?? "—")</strong><small>usuarios registrados</small></div></article>
+            <article><span>✓</span><div><strong>@(users?.Count(user => user.IsOnboarded).ToString() ?? "—")</strong><small>perfiles completados</small></div></article>
+            <article><span>◈</span><div><strong>@(users?.Sum(user => user.AiRecognitionCredits).ToString() ?? "—")</strong><small>créditos disponibles</small></div></article>
+            <article><span>◷</span><div><strong>@(audit?.Count.ToString() ?? "—")</strong><small>eventos recientes</small></div></article>
+        </section>
+
+        @if (CanManageUsers)
+        {
+            <section class="admin-section" aria-labelledby="admin-users-heading">
+                <header class="admin-section-heading">
+                    <div><p class="type">Usuarios</p><h2 id="admin-users-heading">Planes y créditos</h2><p class="muted">Ajusta el acceso comercial y la cuota de reconocimiento de cada cuenta.</p></div>
+                    @if (users is not null) { <span class="admin-count">@users.Count cuentas</span> }
+                </header>
+                @if (isLoading && users is null)
+                {
+                    <p class="muted" role="status">Cargando usuarios…</p>
+                }
+                else if (users is { Count: 0 })
+                {
+                    <div class="empty-state"><strong>Aún no hay usuarios registrados.</strong><p>Las cuentas aparecerán aquí tras completar el registro.</p></div>
+                }
+                else if (users is not null)
+                {
+                    <div class="admin-user-list">
+                        @foreach (var user in users)
+                        {
+                            <article class="admin-user-card">
+                                <div class="admin-user-avatar" aria-hidden="true">@Initial(user.Name)</div>
+                                <div class="admin-user-details">
+                                    <div class="admin-user-title"><h3>@DisplayName(user)</h3><span class="plan-badge @PlanClass(user.AiPlan)">@user.AiPlan</span></div>
+                                    <p><span class="status-dot @(user.IsOnboarded ? "is-active" : "is-pending")"></span>@(user.IsOnboarded ? "Perfil activo" : "Onboarding pendiente")</p>
+                                </div>
+                                <div class="admin-credit-total"><strong>@user.AiRecognitionCredits</strong><span>créditos IA</span></div>
+                                @if (CanManagePlans || CanManageCredits)
+                                {
+                                    <div class="admin-user-actions">
+                                        @if (CanManagePlans) { <button class="secondary" disabled="@isLoading" @onclick="() => SetPlanAsync(user.Id, TargetPlan(user.AiPlan))">Plan @TargetPlan(user.AiPlan)</button> }
+                                        @if (CanManageCredits) { <button class="secondary" disabled="@isLoading" @onclick="() => AddCreditsAsync(user.Id)">+10 créditos</button> }
+                                    </div>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        }
+
+        @if (CanViewAudit)
+        {
+            <section class="admin-section" aria-labelledby="admin-audit-heading">
+                <header class="admin-section-heading"><div><p class="type">Trazabilidad</p><h2 id="admin-audit-heading">Actividad reciente</h2><p class="muted">Últimas acciones administrativas registradas.</p></div></header>
+                @if (isLoading && audit is null) { <p class="muted" role="status">Cargando auditoría…</p> }
+                else if (audit is { Count: 0 }) { <div class="empty-state"><strong>No hay actividad registrada todavía.</strong></div> }
+                else if (audit is not null)
+                {
+                    <ol class="audit-timeline">
+                        @foreach (var item in audit)
+                        {
+                            <li><span class="audit-marker" aria-hidden="true">✓</span><div><strong>@item.Action</strong><small>@item.OccurredAt.LocalDateTime.ToString("g") · Usuario @item.UserId</small></div></li>
+                        }
+                    </ol>
+                }
+            </section>
+        }
+
+        @if (CanViewBilling)
+        {
+            <section class="admin-section admin-billing" aria-labelledby="admin-billing-heading">
+                <div class="admin-billing-icon" aria-hidden="true">◌</div>
+                <div><p class="type">Facturación</p><h2 id="admin-billing-heading">Integración de pagos</h2><p>La estructura está lista. Conecta aquí el proveedor de pagos cuando actives suscripciones o créditos adquiridos.</p></div>
+                <span class="admin-soon">Próximamente</span>
+            </section>
+        }
+
+        @if (!CanManageUsers && !CanViewAudit && !CanViewBilling)
+        {
+            <div class="empty-state"><strong>Tu rol es administrador, pero no tiene permisos operativos asignados.</strong><p>Revisa los permisos de Auth0 e inicia sesión de nuevo.</p></div>
         }
     </section>
-    @if (CanViewAudit)
-    {
-        <section class="family-section"><h2>Auditoría reciente</h2>@if (audit is not null) { <div class="cards">@foreach (var item in audit) { <article class="card"><p>@item.Action</p><small>@item.OccurredAt.LocalDateTime.ToString("g") · @item.UserId</small></article> }</div> }</section>
-    }
-    @if (CanViewBilling) { <section class="family-section"><h2>Facturación</h2><p class="muted">La integración de facturación está preparada en la API y se conectará al proveedor de pagos.</p></section> }
 }
 
 @code {
     private IReadOnlyList<AdminUserSummary>? users;
     private IReadOnlyList<AdminAuditEntry>? audit;
     private string? error;
+    private bool isLoading;
+
     [Parameter] public bool IsActive { get; set; }
     [Parameter] public bool CanManageUsers { get; set; }
     [Parameter] public bool CanManagePlans { get; set; }
     [Parameter] public bool CanManageCredits { get; set; }
     [Parameter] public bool CanViewAudit { get; set; }
     [Parameter] public bool CanViewBilling { get; set; }
+
     protected override async Task OnParametersSetAsync()
     {
-        if (IsActive && users is null)
+        if (IsActive && users is null && audit is null)
         {
             await LoadAsync();
         }
     }
+
     private async Task LoadAsync()
     {
+        isLoading = true;
+        error = null;
         try
         {
-            error = null;
             if (CanManageUsers)
             {
                 users = await Api.GetAdminUsersAsync(CancellationToken.None);
@@ -52,10 +150,28 @@
         }
         catch
         {
-            error = "No tienes permiso para consultar esta sección.";
+            error = "No se ha podido cargar una sección administrativa. Comprueba que tu token contiene el permiso correspondiente.";
+        }
+        finally
+        {
+            isLoading = false;
         }
     }
-    private async Task SetPlanAsync(Guid userId, string plan) { await Api.SetAdminPlanAsync(userId, plan, CancellationToken.None); await LoadAsync(); }
-    private async Task AddCreditsAsync(Guid userId) { await Api.AddAdminCreditsAsync(userId, 10, CancellationToken.None); await LoadAsync(); }
+
+    private async Task SetPlanAsync(Guid userId, string plan)
+    {
+        await Api.SetAdminPlanAsync(userId, plan, CancellationToken.None);
+        await LoadAsync();
+    }
+
+    private async Task AddCreditsAsync(Guid userId)
+    {
+        await Api.AddAdminCreditsAsync(userId, 10, CancellationToken.None);
+        await LoadAsync();
+    }
+
+    private static string DisplayName(AdminUserSummary user) => string.IsNullOrWhiteSpace(user.Name) ? "Cuenta sin perfil" : user.Name;
+    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+    private static string PlanClass(string plan) => plan.Equals("Premium", StringComparison.OrdinalIgnoreCase) ? "premium" : "free";
     private static string TargetPlan(string currentPlan) => currentPlan == "Premium" ? "Free" : "Premium";
 }

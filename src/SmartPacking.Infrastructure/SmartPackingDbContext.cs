@@ -24,8 +24,19 @@ public sealed class SmartPackingDbContext(DbContextOptions<SmartPackingDbContext
         modelBuilder.Entity<UserEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<UserEntity>().HasIndex(entity => new { entity.ExternalIssuer, entity.ExternalSubject }).IsUnique();
         modelBuilder.Entity<UserAuditEventEntity>().HasKey(entity => entity.Id);
+        // Convert DateTimeOffset to long (Unix milliseconds) so SQLite can order by it
+        modelBuilder.Entity<UserAuditEventEntity>()
+            .Property(e => e.OccurredAt)
+            .HasConversion(
+                v => v.ToUnixTimeMilliseconds(),
+                v => DateTimeOffset.FromUnixTimeMilliseconds(v));
         modelBuilder.Entity<UserAuditEventEntity>().HasIndex(entity => new { entity.UserId, entity.OccurredAt });
         modelBuilder.Entity<GarmentRecognitionEventEntity>().HasKey(entity => entity.Id);
+        modelBuilder.Entity<GarmentRecognitionEventEntity>()
+            .Property(e => e.OccurredAt)
+            .HasConversion(
+                v => v.ToUnixTimeMilliseconds(),
+                v => DateTimeOffset.FromUnixTimeMilliseconds(v));
         modelBuilder.Entity<GarmentRecognitionEventEntity>().HasIndex(entity => new { entity.UserId, entity.OccurredAt });
         modelBuilder.Entity<ClothingItemEntity>().HasKey(entity => entity.Id);
         modelBuilder.Entity<ClothingItemEntity>().HasIndex(entity => new { entity.UserId, entity.Name }).IsUnique();

@@ -12,6 +12,7 @@ namespace SmartPacking.Web.Components.Pages;
 
 public partial class Home : ComponentBase, IDisposable
 {
+    private static readonly string[] AdminPermissions = ["admin:users", "admin:plans", "admin:credits", "admin:billing", "admin:audit"];
     [Inject]
     private IWebSmartPackingClient Api { get; set; } = default!;
 
@@ -24,8 +25,9 @@ public partial class Home : ComponentBase, IDisposable
     private bool emailVerified = true;
     private string? email;
     private readonly HashSet<string> permissions = new(StringComparer.Ordinal);
+    private readonly HashSet<string> roles = new(StringComparer.OrdinalIgnoreCase);
     private bool HasPermission(string permission) => permissions.Contains(permission);
-    private bool HasAdminAccess => permissions.Any(permission => permission.StartsWith("admin:", StringComparison.Ordinal));
+    private bool HasAdminAccess => roles.Contains("Admin");
     private string? DefaultOrigin
     {
         get
@@ -59,7 +61,8 @@ public partial class Home : ComponentBase, IDisposable
         if (AuthenticationStateTask is not null)
         {
             var principal = (await AuthenticationStateTask).User;
-            foreach (var permission in principal.FindAll("permissions").Concat(principal.FindAll("https://smartpacking.app/permissions")).SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))) permissions.Add(permission);
+            foreach (var permission in principal.FindAll("permissions").Concat(principal.FindAll("permission")).Concat(principal.FindAll("https://smartpacking.app/permissions")).SelectMany(claim => Auth0ClaimValues.Deserialize(claim.Value)).SelectMany(permission => permission == "admin:*" ? AdminPermissions : [permission])) permissions.Add(permission);
+            foreach (var role in principal.FindAll(System.Security.Claims.ClaimTypes.Role).Concat(principal.FindAll("roles")).Concat(principal.FindAll("https://smartpacking.app/roles")).SelectMany(claim => Auth0ClaimValues.Deserialize(claim.Value))) roles.Add(role);
             email = principal.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
                 ?? principal.FindFirst("email")?.Value;
             var emailVerifiedValue = principal.FindFirst("email_verified")?.Value

@@ -8,6 +8,8 @@ namespace SmartPacking.Api.DependencyInjection;
 
 public static class AuthenticationServiceCollectionExtensions
 {
+    private static readonly string[] AdminPermissions = ["admin:users", "admin:plans", "admin:credits", "admin:billing", "admin:audit"];
+    private static readonly char[] RoleSeparators = [' ', ',', '"'];
     public static bool AddSmartPackingAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         var enabled = configuration.GetValue<bool>("Authentication:Enabled");
@@ -15,11 +17,11 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddScoped<IExternalIdentityAccessor, CurrentUserIdentityAccessor>();
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("AdminUsers", policy => policy.RequireClaim("permissions", "admin:users"));
-            options.AddPolicy("AdminPlans", policy => policy.RequireClaim("permissions", "admin:plans"));
-            options.AddPolicy("AdminCredits", policy => policy.RequireClaim("permissions", "admin:credits"));
-            options.AddPolicy("AdminBilling", policy => policy.RequireClaim("permissions", "admin:billing"));
-            options.AddPolicy("AdminAudit", policy => policy.RequireClaim("permissions", "admin:audit"));
+            options.AddPolicy("AdminUsers", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:users"));
+            options.AddPolicy("AdminPlans", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:plans"));
+            options.AddPolicy("AdminCredits", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:credits"));
+            options.AddPolicy("AdminBilling", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:billing"));
+            options.AddPolicy("AdminAudit", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:audit"));
         });
         if (!enabled)
         {
@@ -43,8 +45,20 @@ public static class AuthenticationServiceCollectionExtensions
                     OnTokenValidated = context =>
                     {
                         var identity = context.Principal?.Identity as System.Security.Claims.ClaimsIdentity;
-                        var permissions = context.Principal?.FindAll("permissions")
+                        var roles = (context.Principal?.Claims ?? [])
+                            .Where(claim => claim.Type is "roles" or "https://smartpacking.app/roles")
+                            .SelectMany(claim => claim.Value.Trim('[', ']', '"').Split(RoleSeparators, StringSplitOptions.RemoveEmptyEntries))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToArray();
+                        foreach (var role in roles.Where(role => !context.Principal!.IsInRole(role)))
+                        {
+                            identity?.AddClaim(new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, role));
+                        }
+
+                        var permissions = (context.Principal?.Claims ?? [])
+                            .Where(claim => claim.Type is "permissions" or "permission")
                             .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                            .SelectMany(permission => permission == "admin:*" ? AdminPermissions : [permission])
                             .Distinct(StringComparer.Ordinal)
                             .ToArray() ?? [];
                         foreach (var permission in permissions.Where(permission => !context.Principal!.HasClaim("permissions", permission)))

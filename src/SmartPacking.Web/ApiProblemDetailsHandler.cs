@@ -27,9 +27,9 @@ public sealed class ApiProblemDetailsHandler : DelegatingHandler
         var errors = problem?.Errors is { Count: > 0 } validationErrors
             ? new Dictionary<string, string[]>(validationErrors)
             : null;
-        var exception = new ApiProblemException((int)response.StatusCode, problem?.Title ?? "No se pudo completar la operación.", problem?.Detail, errors);
+        var exception = new ApiProblemException((   int)response.StatusCode, problem?.Title ?? "No se pudo completar la operación.", problem?.Detail, errors);
         response.Dispose();
-         throw exception;
+        throw exception;
     }
 }
 
