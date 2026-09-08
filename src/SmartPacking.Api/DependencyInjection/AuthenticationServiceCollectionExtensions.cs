@@ -1,6 +1,4 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.DependencyInjection;
 using SmartPacking.Api.Authentication;
 using SmartPacking.Application;
 
@@ -10,19 +8,19 @@ public static class AuthenticationServiceCollectionExtensions
 {
     private static readonly string[] AdminPermissions = ["admin:users", "admin:plans", "admin:credits", "admin:billing", "admin:audit"];
     private static readonly char[] RoleSeparators = [' ', ',', '"'];
+    private const string Admin = "Admin";
+    private const string Permissions = "permissions";
     public static bool AddSmartPackingAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         var enabled = configuration.GetValue<bool>("Authentication:Enabled");
         services.AddHttpContextAccessor();
         services.AddScoped<IExternalIdentityAccessor, CurrentUserIdentityAccessor>();
-        services.AddAuthorization(options =>
-        {
-            options.AddPolicy("AdminUsers", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:users"));
-            options.AddPolicy("AdminPlans", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:plans"));
-            options.AddPolicy("AdminCredits", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:credits"));
-            options.AddPolicy("AdminBilling", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:billing"));
-            options.AddPolicy("AdminAudit", policy => policy.RequireRole("Admin").RequireClaim("permissions", "admin:audit"));
-        });
+        services.AddAuthorizationBuilder()
+            .AddPolicy("AdminUsers", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:users"))
+            .AddPolicy("AdminPlans", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:plans"))
+            .AddPolicy("AdminCredits", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:credits"))
+            .AddPolicy("AdminBilling", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:billing"))
+            .AddPolicy("AdminAudit", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:audit"));
         if (!enabled)
         {
             return false;
@@ -56,14 +54,14 @@ public static class AuthenticationServiceCollectionExtensions
                         }
 
                         var permissions = (context.Principal?.Claims ?? [])
-                            .Where(claim => claim.Type is "permissions" or "permission")
+                            .Where(claim => claim.Type is Permissions or "permission")
                             .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                             .SelectMany(permission => permission == "admin:*" ? AdminPermissions : [permission])
                             .Distinct(StringComparer.Ordinal)
                             .ToArray() ?? [];
-                        foreach (var permission in permissions.Where(permission => !context.Principal!.HasClaim("permissions", permission)))
+                        foreach (var permission in permissions.Where(permission => !context.Principal!.HasClaim(Permissions, permission)))
                         {
-                            identity?.AddClaim(new System.Security.Claims.Claim("permissions", permission));
+                            identity?.AddClaim(new System.Security.Claims.Claim(Permissions, permission));
                         }
 
                         var emailVerified = context.Principal?.FindFirst("https://smartpacking.app/email_verified")?.Value
