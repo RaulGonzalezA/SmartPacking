@@ -1,0 +1,28 @@
+/* Shared visual language. Feature files only define layout specific to their screen. */
+:root {
+    --sp-navy:#153d57;
+    --sp-navy-deep:#0f2e44;
+    --sp-coral:#e86d57;
+    --sp-coral-dark:#bb4d3b;
+    --sp-surface:#fffdfa;
+    --sp-surface-soft:#f4f8f6;
+    --sp-text:#18333f;
+    --sp-muted:#677b82;
+    --sp-border:#dce6e2;
+    --sp-radius-sm:10px;
+    --sp-radius:16px;
+    --sp-radius-lg:22px;
+    --sp-shadow:0 10px 28px rgba(20, 58, 79, .09);
+}
+
+main.app-shell { max-width:1280px; padding:24px clamp(18px,4vw,48px) 76px; }
+button { border-radius:var(--sp-radius-sm); box-shadow:0 3px 0 rgba(136,55,42,.15); transition:transform .15s ease, box-shadow .15s ease, background .15s ease; }
+button:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 5px 12px rgba(20,58,79,.14); }
+button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible { outline:3px solid rgba(232,109,87,.3); outline-offset:2px; }
+button:disabled { cursor:not-allowed; opacity:.56; box-shadow:none; }
+.family-section { border-color:var(--sp-border); border-radius:var(--sp-radius); background:var(--sp-surface); box-shadow:0 4px 15px rgba(20,58,79,.045); }
+.section-heading h2,.page-section-header h2 { color:var(--sp-text); }
+.feedback { border-radius:var(--sp-radius-sm); box-shadow:0 4px 13px rgba(20,58,79,.05); }
+.panel-status { margin:0; padding:12px 14px; border:1px solid #d7e7e1; border-radius:var(--sp-radius-sm); background:#f2faf7; color:#28684c; font-size:.84rem; font-weight:700; }
+.panel-status.error { border-color:#f0c8c1; background:#fff3f0; color:#9d3d30; }
+@media (max-width:620px) { main.app-shell { padding:13px 14px 92px; } }

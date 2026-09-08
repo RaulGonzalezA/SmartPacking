@@ -1,26 +1,28 @@
 @using SmartPacking.Application
-@inject IWebSmartPackingClient Api
 
 @if (IsActive)
 {
     <section class="admin-dashboard" aria-labelledby="admin-heading">
-        <header class="admin-hero">
+        <header class="admin-overview">
             <div>
-                <p class="type">Área protegida</p>
+                <p class="type">Centro de control</p>
                 <h1 id="admin-heading">Administración</h1>
                 <p>Gestiona usuarios, planes, créditos y la actividad reciente de SmartPacking.</p>
             </div>
-            <button class="secondary admin-refresh" disabled="@isLoading" @onclick="LoadAsync">@(isLoading ? "Actualizando…" : "↻ Actualizar")</button>
+            <div class="admin-overview-actions">
+                @if (lastUpdated is not null) { <small>Actualizado @lastUpdated.Value.ToString("HH:mm")</small> }
+                <button class="secondary admin-refresh" disabled="@isLoading" @onclick="LoadAsync">@(isLoading ? "Actualizando…" : "↻ Actualizar")</button>
+            </div>
         </header>
 
-        <section class="admin-permissions" aria-label="Permisos de esta sesión">
-            <span class="admin-permissions-label">Tu acceso</span>
+        <section class="admin-access-bar" aria-label="Permisos de esta sesión">
+            <span>Acceso habilitado</span>
             <div class="admin-permission-list">
-                <span class="admin-permission @(CanManageUsers ? "enabled" : "disabled")">👥 Usuarios</span>
-                <span class="admin-permission @(CanManagePlans ? "enabled" : "disabled")">✦ Planes</span>
-                <span class="admin-permission @(CanManageCredits ? "enabled" : "disabled")">◈ Créditos</span>
-                <span class="admin-permission @(CanViewBilling ? "enabled" : "disabled")">◌ Facturación</span>
-                <span class="admin-permission @(CanViewAudit ? "enabled" : "disabled")">◷ Auditoría</span>
+                @if (CanManageUsers) { <span>Usuarios</span> }
+                @if (CanManagePlans) { <span>Planes</span> }
+                @if (CanManageCredits) { <span>Créditos</span> }
+                @if (CanViewBilling) { <span>Facturación</span> }
+                @if (CanViewAudit) { <span>Auditoría</span> }
             </div>
         </section>
 
@@ -28,12 +30,15 @@
         {
             <p class="feedback error" role="alert">@error</p>
         }
+        @if (!string.IsNullOrWhiteSpace(success))
+        {
+            <p class="feedback admin-success" role="status">@success</p>
+        }
 
-        <section class="admin-summary" aria-label="Resumen administrativo">
-            <article><span>👥</span><div><strong>@(users?.Count.ToString() ?? "—")</strong><small>usuarios registrados</small></div></article>
-            <article><span>✓</span><div><strong>@(users?.Count(user => user.IsOnboarded).ToString() ?? "—")</strong><small>perfiles completados</small></div></article>
-            <article><span>◈</span><div><strong>@(users?.Sum(user => user.AiRecognitionCredits).ToString() ?? "—")</strong><small>créditos disponibles</small></div></article>
-            <article><span>◷</span><div><strong>@(audit?.Count.ToString() ?? "—")</strong><small>eventos recientes</small></div></article>
+        <section class="admin-kpis" aria-label="Resumen administrativo">
+            <article class="admin-kpi admin-kpi-primary"><div><span>Usuarios</span><strong>@(users?.Count.ToString() ?? "—")</strong><small>cuentas registradas</small></div><p><b>@(users?.Count(user => user.IsOnboarded).ToString() ?? "—")</b> con perfil completado</p></article>
+            <article class="admin-kpi"><span>Créditos IA</span><strong>@(users?.Sum(user => user.AiRecognitionCredits).ToString() ?? "—")</strong><small>disponibles actualmente</small></article>
+            <article class="admin-kpi"><span>Actividad reciente</span><strong>@(audit?.Count.ToString() ?? "—")</strong><small>eventos de auditoría</small></article>
         </section>
 
         @if (CanManageUsers)
@@ -41,8 +46,13 @@
             <section class="admin-section" aria-labelledby="admin-users-heading">
                 <header class="admin-section-heading">
                     <div><p class="type">Usuarios</p><h2 id="admin-users-heading">Planes y créditos</h2><p class="muted">Ajusta el acceso comercial y la cuota de reconocimiento de cada cuenta.</p></div>
-                    @if (users is not null) { <span class="admin-count">@users.Count cuentas</span> }
+                    @if (users is not null) { <span class="admin-count">@GetFilteredUsers().Count cuentas</span> }
                 </header>
+                <div class="admin-toolbar">
+                    <label class="admin-search"><span aria-hidden="true">⌕</span><input @bind="search" @bind:event="oninput" placeholder="Buscar por nombre…" aria-label="Buscar usuario" /></label>
+                    <label>Estado <select @bind="statusFilter"><option value="all">Todos</option><option value="active">Activos</option><option value="pending">Pendientes</option></select></label>
+                    <label>Plan <select @bind="planFilter"><option value="all">Todos</option><option value="Free">Free</option><option value="Premium">Premium</option></select></label>
+                </div>
                 @if (isLoading && users is null)
                 {
                     <p class="muted" role="status">Cargando usuarios…</p>
@@ -51,25 +61,37 @@
                 {
                     <div class="empty-state"><strong>Aún no hay usuarios registrados.</strong><p>Las cuentas aparecerán aquí tras completar el registro.</p></div>
                 }
+                else if (GetFilteredUsers().Count == 0)
+                {
+                    <div class="empty-state"><strong>No hay cuentas que coincidan con los filtros.</strong><p>Prueba con otro nombre, estado o plan.</p></div>
+                }
                 else if (users is not null)
                 {
-                    <div class="admin-user-list">
-                        @foreach (var user in users)
+                    <div class="admin-user-table" role="region" aria-label="Listado de usuarios">
+                        <div class="admin-table-head" aria-hidden="true"><span>Usuario</span><span>Estado</span><span>Créditos</span><span>Configuración</span><span>Acciones</span></div>
+                        @foreach (var user in GetFilteredUsers())
                         {
-                            <article class="admin-user-card">
-                                <div class="admin-user-avatar" aria-hidden="true">@Initial(user.Name)</div>
-                                <div class="admin-user-details">
-                                    <div class="admin-user-title"><h3>@DisplayName(user)</h3><span class="plan-badge @PlanClass(user.AiPlan)">@user.AiPlan</span></div>
-                                    <p><span class="status-dot @(user.IsOnboarded ? "is-active" : "is-pending")"></span>@(user.IsOnboarded ? "Perfil activo" : "Onboarding pendiente")</p>
-                                </div>
+                            <article class="admin-user-row">
+                                <div class="admin-identity"><div class="admin-user-avatar" aria-hidden="true">@Initial(user.Name)</div><div><h3>@DisplayName(user)</h3><small>ID @user.Id.ToString("N")[..8]</small></div></div>
+                                <div class="admin-status"><span class="status-dot @(user.IsOnboarded ? "is-active" : "is-pending")"></span><span>@(user.IsOnboarded ? "Activo" : "Pendiente")</span></div>
                                 <div class="admin-credit-total"><strong>@user.AiRecognitionCredits</strong><span>créditos IA</span></div>
                                 @if (CanManagePlans || CanManageCredits)
                                 {
-                                    <div class="admin-user-actions">
-                                        @if (CanManagePlans) { <button class="secondary" disabled="@isLoading" @onclick="() => SetPlanAsync(user.Id, TargetPlan(user.AiPlan))">Plan @TargetPlan(user.AiPlan)</button> }
-                                        @if (CanManageCredits) { <button class="secondary" disabled="@isLoading" @onclick="() => AddCreditsAsync(user.Id)">+10 créditos</button> }
+                                    <div class="admin-user-settings">
+                                        @if (CanManagePlans)
+                                        {
+                                            <label><span>Plan</span><select disabled="@IsSaving(user.Id)" @bind="selectedPlans[user.Id]"><option value="Free">Free</option><option value="Premium">Premium</option></select></label>
+                                        }
+                                        @if (CanManageCredits)
+                                        {
+                                            <label><span>Añadir créditos</span><input type="number" min="1" max="10000" disabled="@IsSaving(user.Id)" @bind="creditAmounts[user.Id]" /></label>
+                                        }
                                     </div>
                                 }
+                                <div class="admin-user-actions">
+                                    @if (CanManagePlans) { <button class="secondary" disabled="@(!CanSavePlan(user) || IsSaving(user.Id))" @onclick="() => SavePlanAsync(user)">Guardar plan</button> }
+                                    @if (CanManageCredits) { <button class="secondary" disabled="@(!CanAddCredits(user.Id) || IsSaving(user.Id))" @onclick="() => AddCreditsAsync(user.Id)">Añadir créditos</button> }
+                                </div>
                             </article>
                         }
                     </div>
@@ -88,7 +110,7 @@
                     <ol class="audit-timeline">
                         @foreach (var item in audit)
                         {
-                            <li><span class="audit-marker" aria-hidden="true">✓</span><div><strong>@item.Action</strong><small>@item.OccurredAt.LocalDateTime.ToString("g") · Usuario @item.UserId</small></div></li>
+                            <li><time datetime="@item.OccurredAt.ToString("O")">@AuditDateLabel(item.OccurredAt)</time><span class="audit-marker" aria-hidden="true">✓</span><div><strong>@AuditActionLabel(item.Action)</strong><small>Cuenta @item.UserId.ToString("N")[..8]</small></div></li>
                         }
                     </ol>
                 }
@@ -111,11 +133,20 @@
     </section>
 }
 
-@code {
+@* Implementation moved to AdminPanel.razor.cs. *@
+@* @code {
     private IReadOnlyList<AdminUserSummary>? users;
     private IReadOnlyList<AdminAuditEntry>? audit;
     private string? error;
+    private string? success;
     private bool isLoading;
+    private string search = string.Empty;
+    private string statusFilter = "all";
+    private string planFilter = "all";
+    private DateTimeOffset? lastUpdated;
+    private readonly Dictionary<Guid, string> selectedPlans = [];
+    private readonly Dictionary<Guid, int> creditAmounts = [];
+    private readonly HashSet<Guid> savingUserIds = [];
 
     [Parameter] public bool IsActive { get; set; }
     [Parameter] public bool CanManageUsers { get; set; }
@@ -123,6 +154,12 @@
     [Parameter] public bool CanManageCredits { get; set; }
     [Parameter] public bool CanViewAudit { get; set; }
     [Parameter] public bool CanViewBilling { get; set; }
+
+    private IReadOnlyList<AdminUserSummary> GetFilteredUsers() => (users ?? [])
+        .Where(user => string.IsNullOrWhiteSpace(search) || DisplayName(user).Contains(search, StringComparison.OrdinalIgnoreCase))
+        .Where(user => statusFilter == "all" || (statusFilter == "active" && user.IsOnboarded) || (statusFilter == "pending" && !user.IsOnboarded))
+        .Where(user => planFilter == "all" || user.AiPlan.Equals(planFilter, StringComparison.OrdinalIgnoreCase))
+        .ToArray();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -136,6 +173,7 @@
     {
         isLoading = true;
         error = null;
+        success = null;
         try
         {
             if (CanManageUsers)
@@ -147,6 +185,9 @@
             {
                 audit = await Api.GetAdminAuditAsync(CancellationToken.None);
             }
+
+            InitializeEditorState();
+            lastUpdated = DateTimeOffset.Now;
         }
         catch
         {
@@ -158,20 +199,80 @@
         }
     }
 
-    private async Task SetPlanAsync(Guid userId, string plan)
+    private async Task SavePlanAsync(AdminUserSummary user)
     {
-        await Api.SetAdminPlanAsync(userId, plan, CancellationToken.None);
-        await LoadAsync();
+        var plan = selectedPlans[user.Id];
+        await SaveUserChangeAsync(user.Id, async () =>
+        {
+            await Api.SetAdminPlanAsync(user.Id, plan, CancellationToken.None);
+            success = $"Plan de {DisplayName(user)} guardado.";
+        });
     }
 
     private async Task AddCreditsAsync(Guid userId)
     {
-        await Api.AddAdminCreditsAsync(userId, 10, CancellationToken.None);
-        await LoadAsync();
+        var credits = creditAmounts[userId];
+        await SaveUserChangeAsync(userId, async () =>
+        {
+            await Api.AddAdminCreditsAsync(userId, credits, CancellationToken.None);
+            success = $"Se han añadido {credits} créditos.";
+        });
     }
+
+    private async Task SaveUserChangeAsync(Guid userId, Func<Task> action)
+    {
+        savingUserIds.Add(userId);
+        error = null;
+        success = null;
+        try
+        {
+            await action();
+            var confirmation = success;
+            await LoadAsync();
+            success = confirmation;
+        }
+        catch (ApiProblemException exception)
+        {
+            error = exception.Message;
+        }
+        catch (HttpRequestException)
+        {
+            error = "No se ha podido guardar el cambio. Inténtalo de nuevo.";
+        }
+        finally
+        {
+            savingUserIds.Remove(userId);
+        }
+    }
+
+    private void InitializeEditorState()
+    {
+        foreach (var user in users ?? [])
+        {
+            selectedPlans[user.Id] = user.AiPlan;
+            creditAmounts.TryAdd(user.Id, 10);
+        }
+    }
+
+    private bool IsSaving(Guid userId) => savingUserIds.Contains(userId);
+    private bool CanSavePlan(AdminUserSummary user) => selectedPlans.TryGetValue(user.Id, out var plan) && !plan.Equals(user.AiPlan, StringComparison.OrdinalIgnoreCase);
+    private bool CanAddCredits(Guid userId) => creditAmounts.TryGetValue(userId, out var credits) && credits is > 0 and <= 10_000;
 
     private static string DisplayName(AdminUserSummary user) => string.IsNullOrWhiteSpace(user.Name) ? "Cuenta sin perfil" : user.Name;
     private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
-    private static string PlanClass(string plan) => plan.Equals("Premium", StringComparison.OrdinalIgnoreCase) ? "premium" : "free";
-    private static string TargetPlan(string currentPlan) => currentPlan == "Premium" ? "Free" : "Premium";
-}
+    private static string AuditActionLabel(string action) => action switch
+    {
+        "user.onboarded" => "Perfil completado",
+        "user.profile_updated" => "Perfil actualizado",
+        "family_profile.archived" => "Viajero archivado",
+        "clothing.deleted" => "Prenda retirada",
+        "trip.deleted" => "Viaje eliminado",
+        "admin.plan_updated" => "Plan actualizado por administración",
+        "admin.credits_added" => "Créditos añadidos por administración",
+        _ => action.Replace('.', ' ')
+    };
+
+    private static string AuditDateLabel(DateTimeOffset occurredAt) => occurredAt.Year < 2000
+        ? "Histórico"
+        : occurredAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm");
+} *@

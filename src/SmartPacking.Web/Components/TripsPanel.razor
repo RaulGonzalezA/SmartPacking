@@ -3,15 +3,149 @@
 @if (IsActive)
 {
     var selectedTrip = Trips.SingleOrDefault(trip => trip.Id == SelectedTripId);
-    <section class="trip-dashboard">
-        <div class="trip-dashboard-top"><label class="trip-selector"><span>Viaje activo</span><select value="@SelectedTripId" @onchange="SelectTrip"><option value="@Guid.Empty">Selecciona un viaje</option>@foreach (var trip in Trips) { <option value="@trip.Id">@trip.Destination · @trip.StartDate.ToString("d", CultureInfo.CurrentCulture)</option> }</select></label><button type="button" disabled="@IsBusy" @onclick="() => showTripForm = !showTripForm">+ Nuevo viaje</button></div>
-        @if (selectedTrip is not null) { <div class="trip-dashboard-content"><div><p class="type">Próxima escapada</p><h1>@selectedTrip.Destination</h1><p class="trip-dates">@selectedTrip.StartDate.ToString("d MMMM", CultureInfo.CurrentCulture) – @selectedTrip.EndDate.ToString("d MMMM yyyy", CultureInfo.CurrentCulture)</p><div class="trip-facts"><span>📍 Desde @(selectedTrip.Origin ?? "origen por confirmar")</span><span>@TransportSummary(selectedTrip)</span><span>👤 @TripProfiles.Count viajero@(TripProfiles.Count == 1 ? string.Empty : "s")</span></div></div><div class="trip-dashboard-side"><strong>☀️ @selectedTrip.MinimumTemperatureCelsius° – @selectedTrip.MaximumTemperatureCelsius°</strong><span>@selectedTrip.Days días</span><details class="action-menu"><summary aria-label="Más acciones del viaje">⋮</summary><div><button type="button" disabled="@IsBusy" @onclick="StartEditingTrip">Editar viaje</button><button type="button" class="danger" disabled="@IsBusy" @onclick="RequestTripDeletion">Eliminar viaje</button></div></details></div></div>@if (selectedTrip.TransportPlan is not null) { <section class="transport-plan"><p class="type">Plan de salida</p><h2>@selectedTrip.TransportPlan.Summary</h2><div>@foreach (var leg in selectedTrip.TransportPlan.Legs) { <article><span>@TransportIcon(leg.Type)</span><div><strong>@leg.From → @leg.To</strong><small>@leg.Description</small></div><b>@(leg.EstimatedMinutes > 0 ? $"~{leg.EstimatedMinutes} min" : "Por confirmar")</b></article> }</div></section> } }
+
+    <section class="trips-page" aria-label="Planificación de viajes">
+        @if (IsLoading) { <p class="panel-status" role="status">Actualizando viajes y previsión…</p> }
+        @if (!string.IsNullOrWhiteSpace(Feedback)) { <p class="panel-status error" role="alert">@Feedback</p> }
+        <header class="trip-command-bar">
+            <label class="trip-selector">
+                <span>Viaje activo</span>
+                <select value="@SelectedTripId" @onchange="SelectTrip">
+                    <option value="@Guid.Empty">Selecciona un viaje</option>
+                    @foreach (var trip in Trips)
+                    {
+                        <option value="@trip.Id">@trip.Destination · @trip.StartDate.ToString("d", CultureInfo.CurrentCulture)</option>
+                    }
+                </select>
+            </label>
+            <button type="button" disabled="@IsBusy" @onclick="() => showTripForm = !showTripForm"><span aria-hidden="true">＋</span> Nuevo viaje</button>
+        </header>
+
+        @if (selectedTrip is null)
+        {
+            <section class="trip-empty-state">
+                <span aria-hidden="true">🧳</span>
+                <div>
+                    <p class="type">Tu próxima aventura empieza aquí</p>
+                    <h1>Planifica un viaje</h1>
+                    <p>Crea un viaje para empezar a organizarlo. Prepararás la maleta, revisarás la previsión y organizarás a los viajeros.</p>
+                    <button type="button" disabled="@IsBusy" @onclick="() => showTripForm = true">Crear mi primer viaje</button>
+                </div>
+            </section>
+        }
+        else
+        {
+            <section class="trip-hero-card">
+                <div class="trip-hero-main">
+                    <p class="type">Próxima escapada</p>
+                    <h1>@selectedTrip.Destination</h1>
+                    <p class="trip-dates">@selectedTrip.StartDate.ToString("d MMMM", CultureInfo.CurrentCulture) – @selectedTrip.EndDate.ToString("d MMMM yyyy", CultureInfo.CurrentCulture)</p>
+                    <div class="trip-fact-grid">
+                        <span><i aria-hidden="true">📍</i> Desde @(selectedTrip.Origin ?? "origen por confirmar")</span>
+                        <span><i aria-hidden="true">🧭</i> @TransportSummary(selectedTrip)</span>
+                        <span><i aria-hidden="true">👥</i> @TripProfiles.Count viajero@(TripProfiles.Count == 1 ? string.Empty : "s")</span>
+                    </div>
+                </div>
+                <aside class="trip-hero-aside">
+                    <div class="trip-weather-summary"><span aria-hidden="true">☀️</span><strong>@selectedTrip.MinimumTemperatureCelsius°–@selectedTrip.MaximumTemperatureCelsius°</strong><small>temperatura prevista</small></div>
+                    <div class="trip-days"><strong>@selectedTrip.Days</strong><span>días</span></div>
+                    <details class="action-menu">
+                        <summary aria-label="Más acciones del viaje">•••</summary>
+                        <div>
+                            <button type="button" disabled="@IsBusy" @onclick="StartEditingTrip">Editar viaje</button>
+                            <button type="button" class="danger" disabled="@IsBusy" @onclick="RequestTripDeletion">Eliminar viaje</button>
+                        </div>
+                    </details>
+                </aside>
+            </section>
+
+            @if (selectedTrip.TransportPlan is not null)
+            {
+                <section class="transport-plan trip-route-card">
+                    <header><div><p class="type">Plan de salida</p><h2>@selectedTrip.TransportPlan.Summary</h2></div><span aria-hidden="true">🗺️</span></header>
+                    <div class="trip-route-legs">
+                        @foreach (var leg in selectedTrip.TransportPlan.Legs)
+                        {
+                            <article>
+                                <span aria-hidden="true">@TransportIcon(leg.Type)</span>
+                                <div><strong>@leg.From → @leg.To</strong><small>@leg.Description</small></div>
+                                <b>@(leg.EstimatedMinutes > 0 ? $"~{leg.EstimatedMinutes} min" : "Por confirmar")</b>
+                            </article>
+                        }
+                    </div>
+                </section>
+            }
+        }
+
+        @if (confirmTripDeletion)
+        {
+            <div class="feedback" role="alertdialog">
+                <p>¿Eliminar este viaje? Esta acción no se puede deshacer.</p>
+                <button type="button" disabled="@IsBusy" class="danger" @onclick="ConfirmTripDeletionAsync">Eliminar</button>
+                <button type="button" disabled="@IsBusy" @onclick="CancelConfirmation">Cancelar</button>
+            </div>
+        }
+
+        @if (showTripForm)
+        {
+            <TripEditor Input="newTrip" IsBusy="IsBusy" Templates="Templates" Title="Nuevo viaje" SubmitLabel="Crear viaje" Submitted="CreateTrip" TemplateChanged="ApplyTemplate" Cancelled="CancelNewTrip" />
+        }
+        @if (editingTrip is not null)
+        {
+            <TripEditor Input="editTrip" IsBusy="IsBusy" Templates="Templates" Title="Editar viaje" SubmitLabel="Guardar cambios" Submitted="SaveTrip" Cancelled="CancelEditingTrip" />
+        }
+
+        <section class="family-section travellers-section">
+            <header class="section-heading">
+                <div><p class="type">Quién viaja</p><h2>Viajeros</h2><p class="muted">Cada viajero conserva su propia maleta.</p></div>
+                <button type="button" disabled="@IsBusy" @onclick="OpenTravellerForm">＋ Añadir viajero</button>
+            </header>
+            <div class="traveller-cards">
+                @foreach (var profile in Profiles.Where(profile => !profile.IsArchived))
+                {
+                    <article class="traveller-card">
+                        <span aria-hidden="true">👤</span>
+                        <div><h3>@profile.Name</h3><p>🧳 Maleta individual</p><small>@(tripProfileIds.Contains(profile.Id) ? "Incluido en este viaje" : "No incluido en este viaje")</small></div>
+                        <label class="switch"><input disabled="@IsBusy" type="checkbox" checked="@tripProfileIds.Contains(profile.Id)" @onchange="args => SetTraveller(profile.Id, args.Value is bool selected && selected)" /><span>Viaja</span></label>
+                        <button type="button" class="secondary" disabled="@IsBusy" @onclick="() => StartEditingTraveller(profile)">Editar</button>
+                    </article>
+                }
+            </div>
+            <button type="button" disabled="@IsBusy" @onclick="SaveTravellers">Guardar viajeros</button>
+        </section>
+
+        @if (showTravellerForm || editingTraveller is not null)
+        {
+            <div class="ui-modal-backdrop">
+                <section class="ui-modal" role="dialog" aria-modal="true">
+                    <header><div><p class="type">Viajero</p><h2>@(editingTraveller is null ? "Añadir viajero" : "Editar viajero")</h2></div><button type="button" class="icon-button" @onclick="CancelTravellerDialog" aria-label="Cerrar">×</button></header>
+                    <EditForm Model="editingTraveller" OnValidSubmit="SaveTravellerDialog" class="modal-form">
+                        <label>Nombre <InputText @bind-Value="CurrentTravellerName" /></label>
+                        <label>Notas de equipaje <InputText @bind-Value="CurrentTravellerPackingNotes" /></label>
+                        <label>Salud y medicación <InputText @bind-Value="CurrentTravellerMedicalNotes" /></label>
+                        <footer><button type="button" class="secondary" @onclick="CancelTravellerDialog">Cancelar</button><button disabled="@IsBusy">Guardar viajero</button></footer>
+                    </EditForm>
+                </section>
+            </div>
+        }
+
+        <WeatherForecastPanel Forecast="Weather" />
+        @if (IsCompleted)
+        {
+            <section class="family-section">
+                <h2>Después del viaje</h2>
+                <div class="profile-items">
+                    @foreach (var item in Wardrobe.Where(item => UsageItemIds.Contains(item.Id)))
+                    {
+                        <label class="profile-item"><input disabled="@IsBusy" type="checkbox" checked="@usedItemIds.Contains(item.Id)" @onchange="args => SetUsage(item.Id, args.Value is bool used && used)" /> @item.Name</label>
+                    }
+                </div>
+                <button type="button" disabled="@IsBusy" @onclick="SaveUsage">Guardar uso real</button>
+            </section>
+        }
+        else if (SelectedTripId != Guid.Empty)
+        {
+            <p class="muted">@WeatherUnavailableMessage</p>
+        }
     </section>
-    @if (confirmTripDeletion) { <div class="feedback" role="alertdialog"><p>¿Eliminar este viaje? Esta acción no se puede deshacer.</p><button type="button" disabled="@IsBusy" class="danger" @onclick="ConfirmTripDeletionAsync">Eliminar</button><button type="button" disabled="@IsBusy" @onclick="CancelConfirmation">Cancelar</button></div> }
-    @if (showTripForm) { <TripEditor Input="newTrip" IsBusy="IsBusy" Templates="Templates" Title="Nuevo viaje" SubmitLabel="Crear viaje" Submitted="CreateTrip" TemplateChanged="ApplyTemplate" Cancelled="CancelNewTrip" /> }
-    @if (editingTrip is not null) { <TripEditor Input="editTrip" IsBusy="IsBusy" Templates="Templates" Title="Editar viaje" SubmitLabel="Guardar cambios" Submitted="SaveTrip" Cancelled="CancelEditingTrip" /> }
-    <section class="family-section travellers-section"><header class="section-heading"><div><p class="type">Quién viaja</p><h2>Viajeros</h2><p class="muted">Cada viajero conserva su propia maleta.</p></div><button type="button" disabled="@IsBusy" @onclick="OpenTravellerForm">+ Añadir viajero</button></header><div class="traveller-cards">@foreach (var profile in Profiles.Where(profile => !profile.IsArchived)) { <article class="traveller-card"><span aria-hidden="true">👤</span><div><h3>@profile.Name</h3><p>🧳 Maleta individual</p><small>@(tripProfileIds.Contains(profile.Id) ? "✅ Incluido en este viaje" : "No incluido en este viaje")</small></div><label class="switch"><input disabled="@IsBusy" type="checkbox" checked="@tripProfileIds.Contains(profile.Id)" @onchange="args => SetTraveller(profile.Id, args.Value is bool selected && selected)" /><span>Viaja</span></label><button type="button" class="secondary" disabled="@IsBusy" @onclick="() => StartEditingTraveller(profile)">Editar →</button></article> }</div><button type="button" disabled="@IsBusy" @onclick="SaveTravellers">Guardar viajeros</button></section>
-    @if (showTravellerForm || editingTraveller is not null) { <div class="ui-modal-backdrop"><section class="ui-modal" role="dialog" aria-modal="true"><header><div><p class="type">Viajero</p><h2>@(editingTraveller is null ? "Añadir viajero" : "Editar viajero")</h2></div><button type="button" class="icon-button" @onclick="CancelTravellerDialog" aria-label="Cerrar">×</button></header><EditForm Model="editingTraveller" OnValidSubmit="SaveTravellerDialog" class="modal-form"><label>Nombre <InputText @bind-Value="CurrentTravellerName" /></label><label>Notas de equipaje <InputText @bind-Value="CurrentTravellerPackingNotes" /></label><label>Salud y medicación <InputText @bind-Value="CurrentTravellerMedicalNotes" /></label><footer><button type="button" class="secondary" @onclick="CancelTravellerDialog">Cancelar</button><button disabled="@IsBusy">Guardar viajero</button></footer></EditForm></section></div> }
-    @if (Trips.Count == 0) { <p class="muted">Crea un viaje para empezar a organizarlo.</p> }<WeatherForecastPanel Forecast="Weather" />
-    @if (IsCompleted) { <section class="family-section"><h2>Después del viaje</h2><div class="profile-items">@foreach (var item in Wardrobe.Where(item => UsageItemIds.Contains(item.Id))) { <label class="profile-item"><input disabled="@IsBusy" type="checkbox" checked="@usedItemIds.Contains(item.Id)" @onchange="args => SetUsage(item.Id, args.Value is bool used && used)" /> @item.Name</label> }</div><button type="button" disabled="@IsBusy" @onclick="SaveUsage">Guardar uso real</button></section> } else if (SelectedTripId != Guid.Empty) { <p class="muted">@WeatherUnavailableMessage</p> }
 }

@@ -16,6 +16,12 @@ public partial class PackingPanel
     public bool IsBusy { get; set; }
 
     [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public string? Feedback { get; set; }
+
+    [Parameter]
     public ProfileTripPackingPlan? Plan { get; set; }
 
     [Parameter]

@@ -104,7 +104,9 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
                     weather.EndDate,
                     weather.Daily.Select(day => new DailyTripForecast(day.Date, day.MinimumCelsius, day.MaximumCelsius, day.RainProbability, day.WeatherCode, day.ApparentMinimumCelsius, day.ApparentMaximumCelsius, day.WindSpeedKilometresPerHour)).ToArray());
         }
-        catch (ApiProblemException exception) when (exception.StatusCode == StatusCodes.Status404NotFound)
+        catch (ApiProblemException exception) when (exception.StatusCode is StatusCodes.Status404NotFound
+            or StatusCodes.Status422UnprocessableEntity
+            or StatusCodes.Status503ServiceUnavailable)
         {
             return null;
         }

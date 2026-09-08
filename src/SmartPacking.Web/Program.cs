@@ -80,9 +80,10 @@ builder.Services.AddHttpClient<SmartPackingApiClient>(client => client.BaseAddre
     .AddHttpMessageHandler<ApiAccessTokenHandler>()
     .AddHttpMessageHandler<ApiProblemDetailsHandler>();
 builder.Services.AddScoped<IWebSmartPackingClient>(provider => provider.GetRequiredService<SmartPackingApiClient>());
+builder.Services.AddScoped<SmartPacking.Web.Components.Pages.HomeDataCoordinator>();
 
 var app = builder.Build();
-app.UseStaticFiles();
+app.MapStaticAssets();
 if (authenticationEnabled)
 {
     app.UseAuthentication();

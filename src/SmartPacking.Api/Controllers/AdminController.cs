@@ -32,6 +32,7 @@ public sealed class AdminController(SmartPackingDbContext dbContext) : Controlle
         }
 
         user.AiPlan = request.Plan;
+        AddAuditEvent(user.Id, "admin.plan_updated");
         await dbContext.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
@@ -52,6 +53,7 @@ public sealed class AdminController(SmartPackingDbContext dbContext) : Controlle
         }
 
         user.AiRecognitionCredits += request.Credits.Value;
+        AddAuditEvent(user.Id, "admin.credits_added");
         await dbContext.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
@@ -62,9 +64,26 @@ public sealed class AdminController(SmartPackingDbContext dbContext) : Controlle
 
     [HttpGet("audit")]
     [Authorize(Policy = "AdminAudit")]
-    public async Task<IActionResult> GetAuditAsync(CancellationToken cancellationToken) => Ok(await dbContext.UserAuditEvents
-        .OrderByDescending(item => item.OccurredAt).Take(200)
-        .Select(item => new { item.UserId, item.Action, item.OccurredAt }).ToArrayAsync(cancellationToken));
+    public async Task<IActionResult> GetAuditAsync(CancellationToken cancellationToken)
+    {
+        var events = await dbContext.UserAuditEvents
+            .OrderByDescending(item => item.OccurredAt).Take(200)
+            .Select(item => new { item.UserId, item.Action, item.OccurredAt })
+            .ToArrayAsync(cancellationToken);
+        return Ok(events.Select(item => new { item.UserId, item.Action, OccurredAt = NormalizeAuditTimestamp(item.OccurredAt) }));
+    }
+
+    private void AddAuditEvent(Guid userId, string action) => dbContext.UserAuditEvents.Add(new UserAuditEventEntity
+    {
+        Id = Guid.NewGuid(),
+        UserId = userId,
+        Action = action,
+        OccurredAt = DateTimeOffset.UtcNow
+    });
+
+    private static DateTimeOffset NormalizeAuditTimestamp(DateTimeOffset occurredAt) => occurredAt.Year < 2000 && occurredAt >= DateTimeOffset.UnixEpoch
+        ? DateTimeOffset.FromUnixTimeSeconds(occurredAt.ToUnixTimeMilliseconds())
+        : occurredAt;
 }
 
 public sealed record SetPlanRequest(string Plan);

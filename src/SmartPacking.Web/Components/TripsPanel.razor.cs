@@ -32,6 +32,8 @@ public partial class TripsPanel
 
     [Parameter] public bool IsActive { get; set; }
     [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public string? Feedback { get; set; }
     [Parameter] public IReadOnlyList<Trip> Trips { get; set; } = [];
     [Parameter] public IReadOnlyList<FamilyProfile> Profiles { get; set; } = [];
     [Parameter] public IReadOnlyList<TripTemplate> Templates { get; set; } = [];

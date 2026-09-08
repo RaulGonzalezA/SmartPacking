@@ -455,8 +455,24 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
     {
         dbContext.ProfilePackingLists.Add(new ProfilePackingListEntity { Id = packingList.Id, TripId = packingList.TripId, ProfileId = packingList.ProfileId, UserId = packingList.UserId, CreatedAt = packingList.CreatedAt });
         dbContext.ProfilePackingListItems.AddRange(packingList.Items.Select(item => new ProfilePackingListItemEntity { PackingListId = packingList.Id, ClothingItemId = item.ClothingItemId, IsPacked = item.IsPacked }));
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return packingList;
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return packingList;
+        }
+        catch (DbUpdateException)
+        {
+            // A concurrent request may have created the unique trip/profile list first.
+            // Recover only when that list now exists; otherwise preserve the real database error.
+            dbContext.ChangeTracker.Clear();
+            var existing = await GetProfilePackingListAsync(packingList.UserId, packingList.TripId, packingList.ProfileId, cancellationToken);
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            throw;
+        }
     }
 
     public async Task<bool> SetProfilePackedAsync(Guid userId, Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken)

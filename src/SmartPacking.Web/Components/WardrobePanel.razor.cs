@@ -22,6 +22,8 @@ public partial class WardrobePanel
 
     [Parameter] public bool IsActive { get; set; }
     [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public string? Feedback { get; set; }
     [Parameter] public GarmentRecognitionUsageResult? AiUsage { get; set; }
     [Parameter, EditorRequired] public IReadOnlyList<ClothingItem> Items { get; set; } = [];
     [Parameter, EditorRequired] public IReadOnlyList<ClothingItem> DeletedItems { get; set; } = [];

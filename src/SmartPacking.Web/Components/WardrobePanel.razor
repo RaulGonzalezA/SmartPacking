@@ -4,6 +4,8 @@
 @if (IsActive)
 {
     <section class="wardrobe">
+        @if (IsLoading) { <p class="panel-status" role="status">Actualizando tu armario…</p> }
+        @if (!string.IsNullOrWhiteSpace(Feedback)) { <p class="panel-status error" role="alert">@Feedback</p> }
         <header class="page-section-header">
             <div><p class="type">Tu colección</p><h1>Mi armario</h1><p class="muted">Elige prendas disponibles y mantenlas listas para cada viaje.</p></div>
             <button type="button" disabled="@(IsBusy || isAnalyzing)" @onclick="OpenCreate">+ Añadir prenda</button>

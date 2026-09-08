@@ -1,4 +1,12 @@
-@if (IsActive && Plan is null)
+@if (IsActive && IsLoading)
+{
+    <section class="family-section panel-status" role="status"><h2>Preparando tu maleta…</h2><p>Actualizando prendas, checklist y reglas de equipaje.</p></section>
+}
+else if (IsActive && !string.IsNullOrWhiteSpace(Feedback))
+{
+    <section class="family-section panel-status error" role="alert"><h2>No hemos podido actualizar la maleta</h2><p>@Feedback</p></section>
+}
+else if (IsActive && Plan is null)
 {
     <section class="family-section"><h2>Maleta</h2><p class="muted">Selecciona un viaje y un viajero para preparar la maleta.</p></section>
 }

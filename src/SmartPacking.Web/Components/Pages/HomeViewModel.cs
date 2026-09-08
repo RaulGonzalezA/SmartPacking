@@ -7,6 +7,9 @@ namespace SmartPacking.Web.Components.Pages;
 
 public sealed class HomeViewModel
 {
+    public PanelStatus TripsStatus { get; } = new();
+    public PanelStatus WardrobeStatus { get; } = new();
+    public PanelStatus PackingStatus { get; } = new();
     public string ActiveTab { get; private set; } = "trips";
     public string? Feedback { get; set; }
     public IReadOnlyList<Trip> Trips { get; set; } = [];
@@ -35,4 +38,14 @@ public sealed class HomeViewModel
     public void SelectInitialTrip() { if (SelectedTripId == Guid.Empty) SelectedTripId = Trips.FirstOrDefault()?.Id ?? Guid.Empty; }
     public void EnsureSelectedProfile() { if (SelectedProfileId == Guid.Empty || !TripProfiles.Any(profile => profile.Id == SelectedProfileId)) SelectedProfileId = TripProfiles.FirstOrDefault()?.Id ?? Guid.Empty; }
     public void ClearSelectedTripData() { TripProfiles = []; Plan = null; FamilyPlans = []; PackingInsights = null; Weather = null; LuggageRules = null; Checklist = []; PreparationProgress = []; UsageItemIds = new HashSet<Guid>(); UsedItemIds = new HashSet<Guid>(); }
+}
+
+public sealed class PanelStatus
+{
+    public bool IsLoading { get; private set; }
+    public string? Feedback { get; private set; }
+
+    public void Begin() { IsLoading = true; Feedback = null; }
+    public void Complete() => IsLoading = false;
+    public void Fail(string feedback) { IsLoading = false; Feedback = feedback; }
 }
