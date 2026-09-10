@@ -35,6 +35,18 @@ public sealed record MobileOptions(
         }
     }
 
+    private static bool RequiresHttps
+    {
+        get
+        {
+#if DEBUG
+            return false;
+#else
+            return true;
+#endif
+        }
+    }
+
     public void Validate()
     {
         if (ApiBaseAddress.Contains("YOUR_API_HOST", StringComparison.Ordinal) ||
@@ -51,12 +63,11 @@ public sealed record MobileOptions(
             throw new InvalidOperationException("La configuración móvil contiene una URL no válida.");
         }
 
-#if !DEBUG
-        if (!string.Equals(apiUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(authorityUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        if (RequiresHttps &&
+            (!string.Equals(apiUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(authorityUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException("Las compilaciones Release requieren HTTPS para la API y Auth0.");
         }
-#endif
     }
 }
