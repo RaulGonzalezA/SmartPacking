@@ -7,10 +7,7 @@ using SmartPacking.Application;
 
 namespace SmartPacking.Infrastructure;
 
-public sealed record DailyWeatherForecast(DateOnly Date, decimal MinimumCelsius, decimal MaximumCelsius, int RainProbability, int WeatherCode, decimal? ApparentMinimumCelsius = null, decimal? ApparentMaximumCelsius = null, decimal? WindSpeedKilometresPerHour = null);
-public sealed record WeatherForecast(string Destination, decimal MinimumCelsius, decimal MaximumCelsius, int RainProbability, DateOnly StartDate, DateOnly EndDate, IReadOnlyList<DailyWeatherForecast> Daily);
-
-public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDistributedCache cache, ILogger<OpenMeteoWeatherProvider> logger)
+public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDistributedCache cache, ILogger<OpenMeteoWeatherProvider> logger) : IWeatherProvider
 {
     private const string Espanha = "España";
 
@@ -49,9 +46,9 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
             return await CacheFallbackCitiesAsync(cacheKey, query, cancellationToken);
         }
     }
-    public async Task<WeatherForecast?> GetAsync(string destination, DateOnly start, DateOnly end, CancellationToken cancellationToken)
+    public async Task<WeatherForecast?> GetAsync(string destination, DateOnly startDate, DateOnly endDate, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(destination) || end < start)
+        if (string.IsNullOrWhiteSpace(destination) || endDate < startDate)
         {
             return null;
         }
@@ -59,13 +56,13 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         // Open-Meteo exposes 16 calendar days counting today, hence today + 15.
         var lastForecastDate = today.AddDays(15);
-        if (end < today || start > lastForecastDate)
+        if (endDate < today || startDate > lastForecastDate)
         {
             return null;
         }
 
-        var forecastStart = start < today ? today : start;
-        var forecastEnd = end > lastForecastDate ? lastForecastDate : end;
+        var forecastStart = startDate < today ? today : startDate;
+        var forecastEnd = endDate > lastForecastDate ? lastForecastDate : endDate;
         var cacheKey = $"weather:v3:{destination.Trim().ToUpperInvariant()}:{forecastStart:yyyyMMdd}:{forecastEnd:yyyyMMdd}";
         var cachedForecast = await cache.GetStringAsync(cacheKey, cancellationToken);
         if (!string.IsNullOrWhiteSpace(cachedForecast))

@@ -1,8 +1,5 @@
 namespace SmartPacking.Domain;
 
-public enum ClothingType { TShirt, Trousers, Shorts, Jacket, Shoes, Sandals, Accessory, Shirt, Sweater, Hoodie, Coat, Dress, Skirt, Underwear, Socks, Swimwear, Pyjamas, Belt, Bag }
-public enum Season { Summer, Winter, MidSeason, AllYear }
-public enum Style { Casual, Formal, Sport, Business }
 public enum TripActivity { Sightseeing, Beach, Hiking, Business, FormalEvent, Sport, Nightlife, Relaxation }
 public enum LuggageType { Backpack, Cabin, Checked }
 public enum TransportType { Car, Plane, Train, Bus, Cruise }
@@ -127,25 +124,6 @@ public static class AirlineLuggageCatalog
     public static AirlineLuggageRule? Find(string? code) => All.SingleOrDefault(rule => string.Equals(rule.Code, code, StringComparison.OrdinalIgnoreCase));
 }
 public sealed record TripDayPlan(DateOnly Date, IReadOnlyCollection<TripActivity> Activities);
-
-public sealed record ClothingItem(
-    Guid Id,
-    string Name,
-    ClothingType Type,
-    Season Season,
-    string Color,
-    int WarmthLevel,
-    bool Waterproof,
-    Style Style,
-    int? WeightGrams,
-    bool IsClean,
-    bool IsAvailable,
-    int PreferenceScore,
-    IReadOnlyCollection<Guid> CombinesWith,
-    bool IsDeleted = false,
-    Guid? OwnerProfileId = null,
-    string? PhotoUrl = null,
-    string? Material = null);
 
 public sealed record UserAddress(string? Street, string? PostalCode, string? City, string? Region)
 {

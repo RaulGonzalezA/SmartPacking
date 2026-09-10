@@ -198,7 +198,6 @@ public partial class Home : ComponentBase, IDisposable
         finally { if (isLoadOperation) State.IsLoading = false; else State.IsSubmitting = false; }
     }
 
-    private Task CreateTripAsync(TripFormInput input) => RunAsync(async () => { var created = await Api.CreateTripAsync(input.ToTrip(Guid.NewGuid()), CancellationToken.None); await RefreshTripsAsync(); State.SelectTrip(created.Id); await RefreshTripDetailsAsync(); State.Feedback = "Viaje creado. Ya puedes completar sus detalles."; });
     private Task CompleteOnboardingAsync(string name) => RunAsync(async () => { currentUser = await Api.CompleteOnboardingAsync(name, lifetimeCancellation.Token); State.Feedback = $"Perfil de {currentUser.Name} creado."; BeginLoad(); await LoadInitialAsync(); });
     private async Task<IReadOnlyDictionary<string, string[]>> UpdateCurrentUserAsync(UserProfile profile)
     {
@@ -228,54 +227,5 @@ public partial class Home : ComponentBase, IDisposable
         }
     }
     private Task DeleteCurrentUserAsync() => RunAsync(async () => { await Api.DeleteCurrentUserAsync("ELIMINAR", lifetimeCancellation.Token); Navigation.NavigateTo("/auth/logout", forceLoad: true); });
-    private Task SaveTripAsync(Trip trip) => RunAsync(async () => { await Api.UpdateTripAsync(trip, CancellationToken.None); await RefreshTripsAsync(); await RefreshTripDetailsAsync(); State.Feedback = "Viaje actualizado."; });
-    private Task DeleteTripAsync() => RunAsync(async () =>
-    {
-        var tripId = State.SelectedTripId;
-        if (tripId == Guid.Empty)
-        {
-            return;
-        }
-
-        BeginLoad();
-        State.SelectTrip(Guid.Empty);
-        State.ClearSelectedTripData();
-        await Api.DeleteTripAsync(tripId, LoadCancellationToken);
-        await RefreshTripsAsync();
-        await RefreshTripDetailsAsync();
-        State.Feedback = "Viaje eliminado. Selecciona otro viaje para continuar.";
-    });
-    private Task AddTravellerAsync(TravellerInput input) => RunAsync(async () => { if (string.IsNullOrWhiteSpace(input.Name)) { State.Feedback = "Escribe el nombre del viajero."; return; } var profile = await Api.CreateProfileAsync(input.Name.Trim(), input.PackingNotes, input.MedicalNotes, CancellationToken.None); await Api.SetTripProfilesAsync(State.SelectedTripId, State.TripProfiles.Select(item => item.Id).Append(profile.Id).ToArray(), CancellationToken.None); await RefreshTripsAsync(); await RefreshTripDetailsAsync(); State.Feedback = $"{profile.Name} se ha añadido como viajero."; });
-    private Task SaveTravellersAsync(IReadOnlyCollection<Guid> ids) => RunAsync(async () => { await Api.SetTripProfilesAsync(State.SelectedTripId, ids, CancellationToken.None); await RefreshTripDetailsAsync(); State.Feedback = "Viajeros guardados."; });
-    private Task SaveTravellerAsync(FamilyProfile profile) => RunAsync(async () => { await Api.UpdateProfileAsync(profile.Id, profile.Name, profile.PackingNotes, profile.MedicalNotes, CancellationToken.None); await RefreshTripsAsync(); await RefreshTripDetailsAsync(); State.Feedback = "Viajero actualizado."; });
-    private Task ArchiveTravellerAsync(Guid id) => RunAsync(async () => { await Api.ArchiveProfileAsync(id, CancellationToken.None); await RefreshTripsAsync(); await RefreshTripDetailsAsync(); State.Feedback = "Viajero archivado. Sus maletas anteriores se conservan."; });
-    private Task CreateClothingAsync(CreateGarmentCommand command) => RunAsync(async () =>
-    {
-        var item = await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), command.Name, command.Type, command.Season, command.Color, 2, false, command.Style, command.WeightGrams, true, true, 70, [], false, command.OwnerId, null, command.Material), CancellationToken.None);
-        if (command.Photo is not null)
-        {
-            await UploadClothingPhotoCoreAsync(item.Id, command.Photo);
-        }
-
-        State.Feedback = "Prenda guardada.";
-        await RefreshWardrobeAsync();
-    });
-    private Task UploadClothingPhotoAsync(UploadGarmentPhotoCommand command) => RunAsync(() => UploadClothingPhotoCoreAsync(command.GarmentId, command.Photo));
-    private async Task UploadClothingPhotoCoreAsync(Guid id, IBrowserFile file) { await using var content = file.OpenReadStream(5 * 1024 * 1024); var url = await Api.UploadClothingPhotoAsync(id, content, file.ContentType, file.Name, CancellationToken.None); wardrobePanel?.SetPhotoUrl(id, url); State.Feedback = "Foto de la prenda actualizada."; }
-    private async Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(IBrowserFile file)
-    {
-        await using var content = file.OpenReadStream(5 * 1024 * 1024);
-        var suggestion = await Api.RecognizeGarmentAsync(content, file.ContentType, file.Name, lifetimeCancellation.Token);
-        aiUsage = await DataCoordinator.RefreshAiUsageAsync(lifetimeCancellation.Token);
-        return suggestion;
-    }
-    private Task UpdateStatusAsync(UpdateGarmentStatusCommand command) => RunAsync(async () => { await Api.UpdateClothingStatusAsync(command.GarmentId, command.IsClean, command.IsAvailable, CancellationToken.None); await RefreshWardrobeAsync(); });
-    private async Task DeleteClothingAsync(Guid id) { await Api.DeleteClothingAsync(id, CancellationToken.None); await RefreshWardrobeAsync(); }
-    private async Task RestoreClothingAsync(Guid id) { await Api.RestoreClothingAsync(id, CancellationToken.None); await RefreshWardrobeAsync(); }
-    private Task SetPackedAsync(SetPackingItemStatusCommand command) => RunAsync(async () => { if (State.Plan is not null) { await Api.SetProfilePackedAsync(State.Plan.Plan.PackingListId, command.GarmentId, command.IsPacked, CancellationToken.None); await RefreshPackingAsync(); } });
-    private Task AddManualClothingAsync(Guid id) => RunAsync(async () => { if (State.Plan is null) { State.Feedback = "Selecciona una prenda para añadirla."; return; } await Api.AddProfilePackingListItemAsync(State.Plan.Plan.PackingListId, id, CancellationToken.None); await RefreshPackingAsync(); });
-    private Task AddToiletryAsync(AddChecklistItemCommand command) => RunAsync(async () => { if (State.SelectedTripId == Guid.Empty || State.SelectedProfileId == Guid.Empty || string.IsNullOrWhiteSpace(command.Name)) { return; } await Api.AddProfileChecklistItemAsync(State.SelectedTripId, State.SelectedProfileId, command.Category, command.Name.Trim(), CancellationToken.None); await RefreshPackingAsync(); });
-    private Task SetChecklistPackedAsync(SetChecklistItemStatusCommand command) => RunAsync(async () => { await Api.SetChecklistPackedAsync(command.ChecklistItemId, command.IsPacked, CancellationToken.None); await RefreshTripDetailsAsync(); });
-    private Task SaveUsageAsync(IReadOnlyCollection<Guid> usedIds) => RunAsync(async () => { await Api.SaveUsageAsync(State.SelectedTripId, State.UsageItemIds.Select(id => new ClothingUsage(State.SelectedTripId, id, usedIds.Contains(id))).ToArray(), CancellationToken.None); State.Feedback = "Uso real guardado."; });
     public void Dispose() { loadCancellation?.Cancel(); loadCancellation?.Dispose(); lifetimeCancellation.Cancel(); lifetimeCancellation.Dispose(); }
 }

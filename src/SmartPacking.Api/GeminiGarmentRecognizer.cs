@@ -5,15 +5,10 @@ using SmartPacking.Application;
 
 namespace SmartPacking.Api;
 
-public interface IGarmentRecognizer
-{
-    Task<GarmentRecognitionSuggestion> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken);
-}
-
 public sealed partial class GeminiGarmentRecognizer(HttpClient httpClient, IConfiguration configuration, ILogger<GeminiGarmentRecognizer> logger) : IGarmentRecognizer
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-    private const string Prompt = "Analiza exclusivamente la prenda principal de la imagen. Responde en español y solo con JSON. category debe ser uno de Camiseta, Camisa, Jersey, Sudadera, Abrigo, Chaqueta, Vestido, Falda, Pantalón, Pantalón corto, Ropa interior, Calcetines, Bañador, Pijama, Cinturón, Bolso, Zapatos, Sandalias o Accesorio. season contiene Primavera, Verano, Otoño o Invierno; style uno de Casual, Formal, Deportivo o Negocios. estimatedWeightGrams es una estimación entera razonable. suitableFor contiene Turismo, Ocio, Playa, Senderismo o Negocios.";
+    private const string Prompt = "Analiza exclusivamente la prenda principal de la imagen. Responde en español y solo con un objeto JSON, sin Markdown ni campos adicionales. category debe ser uno de Camiseta, Camisa, Jersey, Sudadera, Abrigo, Chaqueta, Vestido, Falda, Pantalón, Pantalón corto, Ropa interior, Calcetines, Bañador, Pijama, Cinturón, Bolso, Zapatos, Sandalias o Accesorio. seasons es un array con Primavera, Verano, Otoño o Invierno; style uno de Casual, Formal, Deportivo o Negocios. estimatedWeightGrams es una estimación entera razonable. suitableFor contiene Turismo, Ocio, Playa, Senderismo o Negocios.";
 
     public async Task<GarmentRecognitionSuggestion> RecognizeAsync(Stream photo, string contentType, CancellationToken cancellationToken)
     {
@@ -49,10 +44,10 @@ public sealed partial class GeminiGarmentRecognizer(HttpClient httpClient, IConf
             .SelectMany(step => step.GetProperty("content").EnumerateArray())
             .First(part => part.GetProperty("type").GetString() == "text")
             .GetProperty("text").GetString();
-        var suggestion = JsonSerializer.Deserialize<GarmentRecognitionSuggestion>(text ?? string.Empty, JsonOptions)
+        var suggestionResponse = JsonSerializer.Deserialize<GeminiSuggestionResponse>(ExtractJson(text), JsonOptions)
             ?? throw new InvalidOperationException("Gemini no devolvió una propuesta válida.");
         LogGeminiSuccess(logger, stopwatch.ElapsedMilliseconds, request.model);
-        return Normalize(suggestion);
+        return Normalize(suggestionResponse.ToSuggestion());
     }
 
     [LoggerMessage(LogLevel.Warning, "Gemini rechazó el reconocimiento con estado {StatusCode} en {ElapsedMilliseconds} ms para {Model}")]
@@ -82,5 +77,44 @@ public sealed partial class GeminiGarmentRecognizer(HttpClient httpClient, IConf
             style,
             Math.Clamp(value.EstimatedWeightGrams, 20, 5000),
             suitableFor);
+    }
+
+    private static string ExtractJson(string? text)
+    {
+        var json = text?.Trim();
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            throw new InvalidOperationException("Gemini no devolvió contenido para el reconocimiento.");
+        }
+
+        if (!json.StartsWith("```", StringComparison.Ordinal))
+        {
+            return json;
+        }
+
+        var firstLineEnd = json.IndexOf('\n');
+        var fencedJson = firstLineEnd < 0 ? string.Empty : json[(firstLineEnd + 1)..];
+        var closingFence = fencedJson.LastIndexOf("```", StringComparison.Ordinal);
+        return (closingFence >= 0 ? fencedJson[..closingFence] : fencedJson).Trim();
+    }
+
+    private sealed record GeminiSuggestionResponse(
+        string? Category,
+        string? Color,
+        string? Material,
+        IReadOnlyCollection<string>? Season,
+        IReadOnlyCollection<string>? Seasons,
+        string? Style,
+        int? EstimatedWeightGrams,
+        IReadOnlyCollection<string>? SuitableFor)
+    {
+        public GarmentRecognitionSuggestion ToSuggestion() => new(
+            Category ?? string.Empty,
+            Color ?? string.Empty,
+            Material,
+            Seasons ?? Season ?? [],
+            Style ?? string.Empty,
+            EstimatedWeightGrams ?? 0,
+            SuitableFor ?? []);
     }
 }

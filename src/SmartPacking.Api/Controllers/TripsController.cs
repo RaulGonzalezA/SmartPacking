@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using FluentValidation;
 using SmartPacking.Api;
+using SmartPacking.Api.Contracts;
 using SmartPacking.Api.Validation;
 using SmartPacking.Application;
 using SmartPacking.Contracts;
@@ -15,7 +16,7 @@ public sealed class TripsController(
     ISmartPackingStore store,
     PackingListService packingLists,
     ProfilePackingListService profilePackingLists,
-    OpenMeteoWeatherProvider weather,
+    IWeatherProvider weather,
     IValidator<SaveTripRequest> tripValidator,
     IValidator<SaveUserTripTemplateRequest> templateValidator,
     IValidator<CreateChecklistItemRequest> checklistValidator) : ControllerBase
@@ -26,7 +27,7 @@ public sealed class TripsController(
     public async Task<ActionResult<IReadOnlyList<TripResponse>>> GetAsync(CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        return Ok((await store.GetTripsAsync(user.Id, cancellationToken)).Select(ToResponse).ToArray());
+        return Ok((await store.GetTripsAsync(user.Id, cancellationToken)).Select(TripMapper.ToResponse).ToArray());
     }
 
     [HttpPost]
@@ -40,28 +41,11 @@ public sealed class TripsController(
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
         var template = TripTemplateCatalog.Find(request.TemplateKey);
-        var trip = new Trip(
-            Guid.NewGuid(),
-            request.Destination.Trim(),
-            request.StartDate,
-            request.EndDate,
-            request.MinimumTemperatureCelsius,
-            request.MaximumTemperatureCelsius,
-            request.Activities.Count == 0 ? template?.Activities ?? [Style.Casual] : request.Activities.Select(activity => (Style)activity).ToArray(),
-            template?.Key,
-            request.LuggageAllowanceGrams ?? template?.DefaultLuggageAllowanceGrams ?? 10000,
-            request.CabinOnly ?? template?.CabinOnly ?? true,
-            (LuggageType)(request.LuggageType ?? (int)(request.CabinOnly ?? template?.CabinOnly ?? true ? LuggageType.Cabin : LuggageType.Checked)),
-            request.LuggageHeightCentimetres ?? 55,
-            request.LuggageWidthCentimetres ?? 40,
-            request.LuggageDepthCentimetres ?? 20,
-            request.DayPlans?.Select(plan => new TripDayPlan(plan.Date, plan.Activities.Select(activity => (TripActivity)activity).ToArray())).ToArray(), request.AirlineCode,
-            request.TransportTypes?.Select(type => (TransportType)type).ToArray(), ToLuggages(request.Luggages), request.Origin?.Trim());
-        trip = trip with { TransportPlan = TransportPlanner.Build(trip.Origin, trip.Destination, trip.TransportTypesOrEmpty) };
+        var trip = TripFactory.CreateForCreation(request, Guid.NewGuid(), template);
         var created = await store.AddTripAsync(user.Id, trip, cancellationToken);
         await store.SetTripProfilesAsync(user.Id, created.Id, [user.Id], cancellationToken);
         await store.AddChecklistItemsAsync(user.Id, ChecklistDefaults.Create(created.Id), cancellationToken);
-        return Created($"/api/trips/{created.Id}", ToResponse(created));
+        return Created($"/api/trips/{created.Id}", TripMapper.ToResponse(created));
     }
 
     [HttpDelete("{tripId:guid}")]
@@ -81,10 +65,9 @@ public sealed class TripsController(
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var trip = new Trip(tripId, request.Destination.Trim(), request.StartDate, request.EndDate, request.MinimumTemperatureCelsius, request.MaximumTemperatureCelsius, request.Activities.Count == 0 ? [Style.Casual] : request.Activities.Select(activity => (Style)activity).ToArray(), request.TemplateKey, request.LuggageAllowanceGrams ?? 10000, request.CabinOnly ?? true, (LuggageType)(request.LuggageType ?? (int)(request.CabinOnly ?? true ? LuggageType.Cabin : LuggageType.Checked)), request.LuggageHeightCentimetres ?? 55, request.LuggageWidthCentimetres ?? 40, request.LuggageDepthCentimetres ?? 20, request.DayPlans?.Select(plan => new TripDayPlan(plan.Date, plan.Activities.Select(activity => (TripActivity)activity).ToArray())).ToArray(), request.AirlineCode, request.TransportTypes?.Select(type => (TransportType)type).ToArray(), ToLuggages(request.Luggages), request.Origin?.Trim());
-        trip = trip with { TransportPlan = TransportPlanner.Build(trip.Origin, trip.Destination, trip.TransportTypesOrEmpty) };
+        var trip = TripFactory.CreateUpdate(request, tripId);
         var updated = await store.UpdateTripAsync(user.Id, trip, cancellationToken);
-        return updated is null ? NotFoundProblem(viajeNoEncontrado) : Ok(ToResponse(updated));
+        return updated is null ? NotFoundProblem(viajeNoEncontrado) : Ok(TripMapper.ToResponse(updated));
     }
 
     [HttpGet("{tripId:guid}/packing-list")]
@@ -288,9 +271,6 @@ public sealed class TripsController(
         return NoContent();
     }
 
-    private static TripResponse ToResponse(Trip trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, trip.Activities.Select(activity => (int)activity).ToArray(), trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (int)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, trip.DayPlansOrEmpty.Select(plan => new TripDayPlanContract(plan.Date, plan.Activities.Select(activity => (int)activity).ToArray())).ToArray(), trip.AirlineCode, trip.TransportTypesOrEmpty.Select(type => (int)type).ToArray(), trip.LuggagesOrDefault.Select(luggage => new TripLuggageContract(luggage.Id, (int)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray(), trip.Origin, ToTransportPlan(trip.TransportPlan));
-    private static TransportPlanContract? ToTransportPlan(TransportPlan? plan) => plan is null ? null : new(plan.Summary, plan.Legs.Select(leg => new TransportLegContract((int)leg.Type, leg.From, leg.To, leg.EstimatedMinutes, leg.Description)).ToArray());
-    private static TripLuggage[]? ToLuggages(IReadOnlyCollection<TripLuggageContract>? luggages) => luggages?.Select(luggage => new TripLuggage(luggage.Id == Guid.Empty ? Guid.NewGuid() : luggage.Id, (LuggageType)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray();
     private async Task<IReadOnlyList<ChecklistItem>> GetOrCreateProfileChecklistAsync(Guid userId, Guid tripId, Guid profileId, CancellationToken cancellationToken)
     {
         var items = await store.GetChecklistAsync(userId, tripId, profileId, cancellationToken);

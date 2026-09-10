@@ -1,5 +1,6 @@
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.DependencyInjection;
+using SmartPacking.Application;
 
 namespace SmartPacking.Api.DependencyInjection;
 
