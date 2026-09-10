@@ -8,7 +8,6 @@ public static class AuthenticationServiceCollectionExtensions
 {
     private static readonly string[] AdminPermissions = ["admin:users", "admin:plans", "admin:credits", "admin:billing", "admin:audit"];
     private static readonly char[] RoleSeparators = [' ', ',', '"'];
-    private const string Admin = "Admin";
     private const string Permissions = "permissions";
     public static bool AddSmartPackingAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
@@ -16,11 +15,11 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<IExternalIdentityAccessor, CurrentUserIdentityAccessor>();
         services.AddAuthorizationBuilder()
-            .AddPolicy("AdminUsers", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:users"))
-            .AddPolicy("AdminPlans", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:plans"))
-            .AddPolicy("AdminCredits", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:credits"))
-            .AddPolicy("AdminBilling", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:billing"))
-            .AddPolicy("AdminAudit", policy => policy.RequireRole(Admin).RequireClaim(Permissions, "admin:audit"));
+            .AddPolicy("AdminUsers", policy => policy.RequireClaim(Permissions, "admin:users"))
+            .AddPolicy("AdminPlans", policy => policy.RequireClaim(Permissions, "admin:plans"))
+            .AddPolicy("AdminCredits", policy => policy.RequireClaim(Permissions, "admin:credits"))
+            .AddPolicy("AdminBilling", policy => policy.RequireClaim(Permissions, "admin:billing"))
+            .AddPolicy("AdminAudit", policy => policy.RequireClaim(Permissions, "admin:audit"));
         if (!enabled)
         {
             return false;

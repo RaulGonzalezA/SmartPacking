@@ -100,6 +100,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
             return NotFoundProblem(viajeNoEncontrado);
         }
 
+        var (forecast, weatherFeedback) = await GetDashboardWeatherAsync(trip, cancellationToken);
         var profiles = await store.GetTripProfilesAsync(user.Id, tripId, cancellationToken);
         var selectedProfileId = Guid.Empty;
         if (profiles.Any(profile => profile.Id == profileId))
@@ -116,7 +117,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
 
         foreach (var profile in profiles)
         {
-            var plan = await profilePackingLists.GetOrCreateAsync(user.Id, tripId, profile.Id, cancellationToken);
+            var plan = await profilePackingLists.GetOrCreateAsync(user.Id, tripId, profile.Id, cancellationToken, forecast);
             var checklist = await GetOrCreateProfileChecklistAsync(user.Id, tripId, profile.Id, cancellationToken);
             if (plan is not null)
             {
@@ -137,7 +138,6 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
 
         var selectedPlan = familyPlans.SingleOrDefault(plan => plan.Profile.Id == selectedProfileId);
         var rules = selectedPlan is null ? null : BuildLuggageRules(trip, selectedPlan);
-        var (forecast, weatherFeedback) = await GetDashboardWeatherAsync(trip, cancellationToken);
         var usage = await store.GetUsageAsync(user.Id, tripId, cancellationToken);
         return Ok(new TripDashboard(profiles, selectedProfileId, selectedPlan, familyPlans, selectedChecklist, progress, rules, usage, forecast, weatherFeedback));
     }

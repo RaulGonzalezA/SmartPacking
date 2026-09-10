@@ -20,7 +20,7 @@ public static class TripTemplateCatalog
     [
         new("city-break", "Escapada urbana", "Equipaje de cabina para unos días de turismo y cenas.", [Style.Casual], 15, 25, 10000, true),
         new("beach", "Playa", "Prendas ligeras, calzado abierto y protección solar.", [Style.Casual, Style.Sport], 22, 32, 10000, true),
-        new("business", "Trabajo", "Ropa formal y tecnología para reuniones.", [Style.Formal], 12, 22, 10000, true),
+        new("business", "Trabajo", "Ropa de negocios y tecnología para reuniones.", [Style.Business], 12, 22, 10000, true),
         new("outdoor", "Naturaleza", "Ropa deportiva, capas y protección frente a la lluvia.", [Style.Sport], 5, 18, 15000, false)
     ];
 

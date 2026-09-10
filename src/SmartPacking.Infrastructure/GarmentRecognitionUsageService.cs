@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SmartPacking.Application;
+using System.Data;
 
 namespace SmartPacking.Infrastructure;
 
@@ -9,30 +10,59 @@ public sealed class GarmentRecognitionUsageService(
     ISmartPackingStore store,
     IConfiguration configuration) : IGarmentRecognitionUsageService
 {
-    public async Task<GarmentRecognitionUsageResult> RegisterAttemptAsync(CancellationToken cancellationToken)
+    public Task<GarmentRecognitionUsageResult> CheckAllowanceAsync(CancellationToken cancellationToken) => GetUsageAsync(cancellationToken);
+
+    public async Task<GarmentRecognitionUsageCommitResult> RegisterSuccessfulUsageAsync(CancellationToken cancellationToken)
     {
-        var usage = await GetUsageAsync(cancellationToken);
-        if (!usage.Allowed)
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            return usage;
+            try
+            {
+                return await CommitSuccessfulUsageAsync(user.Id, cancellationToken);
+            }
+            catch (DbUpdateException) when (attempt < 2)
+            {
+                // A serializable transaction can be retried after a concurrent commit.
+                dbContext.ChangeTracker.Clear();
+            }
         }
 
-        var user = await store.GetDefaultUserAsync(cancellationToken);
-        var entity = await dbContext.Users.SingleAsync(candidate => candidate.Id == user.Id, cancellationToken);
-        if (usage.Used >= usage.MonthlyLimit && entity.AiRecognitionCredits > 0)
+        throw new InvalidOperationException("No se pudo registrar el consumo de IA de forma segura.");
+    }
+
+    private async Task<GarmentRecognitionUsageCommitResult> CommitSuccessfulUsageAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var entity = await dbContext.Users.SingleAsync(candidate => candidate.Id == userId, cancellationToken);
+        var now = DateTimeOffset.UtcNow;
+        var periodStart = new DateOnly(now.Year, now.Month, 1);
+        var start = new DateTimeOffset(periodStart.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var end = start.AddMonths(1);
+        var used = await dbContext.GarmentRecognitionEvents.CountAsync(item => item.UserId == userId && item.OccurredAt >= start && item.OccurredAt < end, cancellationToken);
+        var plan = NormalizePlan(entity.AiPlan);
+        var limit = PlanLimit(plan);
+        var usesCredit = used >= limit;
+        if (usesCredit && entity.AiRecognitionCredits <= 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return new(false, CreateUsageResult(used, limit, entity.AiRecognitionCredits, plan, periodStart));
+        }
+
+        if (usesCredit)
         {
             entity.AiRecognitionCredits--;
         }
-        var now = DateTimeOffset.UtcNow;
+
         dbContext.GarmentRecognitionEvents.Add(new GarmentRecognitionEventEntity
         {
             Id = Guid.NewGuid(),
-            UserId = user.Id,
+            UserId = userId,
             OccurredAt = now,
         });
         await dbContext.SaveChangesAsync(cancellationToken);
-
-        return await GetUsageAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new(true, CreateUsageResult(used + 1, limit, entity.AiRecognitionCredits, plan, periodStart));
     }
 
     public async Task<GarmentRecognitionUsageResult> GetUsageAsync(CancellationToken cancellationToken)
@@ -45,10 +75,17 @@ public sealed class GarmentRecognitionUsageService(
         var end = start.AddMonths(1);
         var entries = await dbContext.GarmentRecognitionEvents.Where(item => item.UserId == user.Id).ToListAsync(cancellationToken);
         var used = entries.Count(item => item.OccurredAt >= start && item.OccurredAt < end);
-        var plan = string.Equals(entity.AiPlan, "Premium", StringComparison.OrdinalIgnoreCase) ? "Premium" : "Free";
+        var plan = NormalizePlan(entity.AiPlan);
         var limit = PlanLimit(plan);
-        var remaining = Math.Max(0, limit - used) + entity.AiRecognitionCredits;
-        return new GarmentRecognitionUsageResult(remaining > 0, used, limit, entity.AiRecognitionCredits, remaining, remaining <= Math.Max(2, limit / 10), plan, periodStart);
+        return CreateUsageResult(used, limit, entity.AiRecognitionCredits, plan, periodStart);
+    }
+
+    private static string NormalizePlan(string? plan) => string.Equals(plan, "Premium", StringComparison.OrdinalIgnoreCase) ? "Premium" : "Free";
+
+    private static GarmentRecognitionUsageResult CreateUsageResult(int used, int limit, int creditBalance, string plan, DateOnly periodStart)
+    {
+        var remaining = Math.Max(0, limit - used) + creditBalance;
+        return new(remaining > 0, used, limit, creditBalance, remaining, remaining <= Math.Max(2, limit / 10), plan, periodStart);
     }
 
     private int PlanLimit(string plan)

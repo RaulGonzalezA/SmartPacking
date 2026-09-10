@@ -24,7 +24,8 @@ public sealed class GarmentRecognitionControllerTests
 
         var badRequest = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
         badRequest.Value.Should().BeOfType<ValidationProblemDetails>();
-        await usage.DidNotReceive().RegisterAttemptAsync(Arg.Any<CancellationToken>());
+        await usage.DidNotReceive().CheckAllowanceAsync(Arg.Any<CancellationToken>());
+        await usage.DidNotReceive().RegisterSuccessfulUsageAsync(Arg.Any<CancellationToken>());
         await recognizer.DidNotReceive().RecognizeAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
@@ -33,7 +34,7 @@ public sealed class GarmentRecognitionControllerTests
     {
         var recognizer = Substitute.For<IGarmentRecognizer>();
         var usage = Substitute.For<IGarmentRecognitionUsageService>();
-        usage.RegisterAttemptAsync(Arg.Any<CancellationToken>()).Returns(new GarmentRecognitionUsageResult(false, 20, 20, 0, 0, true, "Free", new DateOnly(2026, 9, 1)));
+        usage.CheckAllowanceAsync(Arg.Any<CancellationToken>()).Returns(new GarmentRecognitionUsageResult(false, 20, 20, 0, 0, true, "Free", new DateOnly(2026, 9, 1)));
         var controller = new GarmentRecognitionController(recognizer, usage);
         using var content = new MemoryStream([1]);
 
@@ -50,7 +51,9 @@ public sealed class GarmentRecognitionControllerTests
         var recognizer = Substitute.For<IGarmentRecognizer>();
         var usage = Substitute.For<IGarmentRecognitionUsageService>();
         var suggestion = new GarmentRecognitionSuggestion("Jersey", "Verde", "Lana", ["Invierno"], "Casual", 350, ["Turismo"]);
-        usage.RegisterAttemptAsync(Arg.Any<CancellationToken>()).Returns(new GarmentRecognitionUsageResult(true, 1, 20, 0, 19, false, "Free", new DateOnly(2026, 9, 1)));
+        var allowance = new GarmentRecognitionUsageResult(true, 1, 20, 0, 19, false, "Free", new DateOnly(2026, 9, 1));
+        usage.CheckAllowanceAsync(Arg.Any<CancellationToken>()).Returns(allowance);
+        usage.RegisterSuccessfulUsageAsync(Arg.Any<CancellationToken>()).Returns(new GarmentRecognitionUsageCommitResult(true, allowance));
         recognizer.RecognizeAsync(Arg.Any<Stream>(), "image/jpeg", Arg.Any<CancellationToken>()).Returns(suggestion);
         var controller = new GarmentRecognitionController(recognizer, usage);
         using var content = new MemoryStream([1]);
@@ -59,6 +62,26 @@ public sealed class GarmentRecognitionControllerTests
 
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.Value.Should().Be(suggestion);
+        await usage.Received(1).RegisterSuccessfulUsageAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RecognizeAsyncDoesNotRegisterUsageWhenGeminiFails()
+    {
+        var recognizer = Substitute.For<IGarmentRecognizer>();
+        var usage = Substitute.For<IGarmentRecognitionUsageService>();
+        var allowance = new GarmentRecognitionUsageResult(true, 1, 20, 0, 19, false, "Free", new DateOnly(2026, 9, 1));
+        usage.CheckAllowanceAsync(Arg.Any<CancellationToken>()).Returns(allowance);
+        recognizer.RecognizeAsync(Arg.Any<Stream>(), "image/jpeg", Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<GarmentRecognitionSuggestion>(new HttpRequestException("Gemini no disponible")));
+        var controller = new GarmentRecognitionController(recognizer, usage);
+        using var content = new MemoryStream([1]);
+
+        var result = await controller.RecognizeAsync(Photo(content, "image/jpeg"), CancellationToken.None);
+
+        var problem = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        problem.StatusCode.Should().Be(StatusCodes.Status503ServiceUnavailable);
+        await usage.DidNotReceive().RegisterSuccessfulUsageAsync(Arg.Any<CancellationToken>());
     }
 
     private static FormFile Photo(Stream content, string contentType) => new(content, 0, content.Length, "photo", "garment.jpg")

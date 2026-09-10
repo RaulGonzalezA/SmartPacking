@@ -22,7 +22,7 @@ public sealed class GarmentRecognitionController(
             return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["photo"] = ["Selecciona una foto JPEG de hasta 5 MB."] }));
         }
 
-        var usage = await recognitionUsage.RegisterAttemptAsync(cancellationToken);
+        var usage = await recognitionUsage.CheckAllowanceAsync(cancellationToken);
         if (!usage.Allowed)
         {
             return Problem(
@@ -34,7 +34,17 @@ public sealed class GarmentRecognitionController(
         try
         {
             await using var stream = photo.OpenReadStream();
-            return Ok(await garmentRecognizer.RecognizeAsync(stream, photo.ContentType, cancellationToken));
+            var suggestion = await garmentRecognizer.RecognizeAsync(stream, photo.ContentType, cancellationToken);
+            var committedUsage = await recognitionUsage.RegisterSuccessfulUsageAsync(cancellationToken);
+            if (!committedUsage.Registered)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status429TooManyRequests,
+                    title: "Límite mensual de reconocimientos alcanzado",
+                    detail: $"Has utilizado {committedUsage.Usage.Used} de {committedUsage.Usage.MonthlyLimit} reconocimientos este mes.");
+            }
+
+            return Ok(suggestion);
         }
         catch (InvalidOperationException exception)
         {

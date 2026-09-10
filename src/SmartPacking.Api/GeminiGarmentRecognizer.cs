@@ -67,7 +67,7 @@ public sealed partial class GeminiGarmentRecognizer(HttpClient httpClient, IConf
         var categoryCandidate = value.Category?.Trim();
         var category = categories.Contains(categoryCandidate ?? string.Empty) ? categoryCandidate! : "Accesorio";
         var seasons = (value.Seasons ?? []).Where(season => season is "Primavera" or "Verano" or "Otoño" or "Invierno").Distinct().ToArray();
-        var style = value.Style is "Casual" or "Formal" or "Deportivo" ? value.Style : "Casual";
+        var style = value.Style is "Casual" or "Formal" or "Deportivo" or "Negocios" ? value.Style : "Casual";
         var suitableFor = (value.SuitableFor ?? [])
             .Where(item => !string.IsNullOrWhiteSpace(item))
             .Distinct()

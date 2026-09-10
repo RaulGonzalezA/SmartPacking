@@ -166,4 +166,26 @@ public sealed class PackingRecommendationServiceTests
 
         result.Items.Select(item => item.Item.Type).Should().Contain([ClothingType.Sweater, ClothingType.Coat]);
     }
+
+    [Fact]
+    public void CreateOutfitsUsesTheForecastForEachDayInsteadOfTheGlobalTripMinimum()
+    {
+        var trip = new Trip(Guid.NewGuid(), "Roma", new DateOnly(2026, 9, 14), new DateOnly(2026, 9, 15), 9, 32, [Style.Casual]);
+        var tShirt = new ClothingItem(Guid.NewGuid(), "Camiseta", ClothingType.TShirt, Season.AllYear, "Azul", 2, false, Style.Casual, 180, true, true, 90, []);
+        var trousers = new ClothingItem(Guid.NewGuid(), "Pantalón", ClothingType.Trousers, Season.AllYear, "Negro", 3, false, Style.Casual, 500, true, true, 80, []);
+        var shoes = new ClothingItem(Guid.NewGuid(), "Zapatillas", ClothingType.Shoes, Season.AllYear, "Blanco", 3, false, Style.Casual, 700, true, true, 80, []);
+        var sweater = new ClothingItem(Guid.NewGuid(), "Jersey", ClothingType.Sweater, Season.Winter, "Gris", 6, false, Style.Casual, 450, true, true, 75, []);
+        var coat = new ClothingItem(Guid.NewGuid(), "Abrigo", ClothingType.Coat, Season.Winter, "Negro", 9, false, Style.Casual, 1100, true, true, 70, []);
+        var items = new[] { tShirt, trousers, shoes, sweater, coat }.Select(item => new PlannedItem(new RecommendedItem(item, 50, []), false)).ToArray();
+        var forecast = new TripWeatherForecast("Roma", 9, 32, 20, trip.StartDate, trip.EndDate,
+        [
+            new DailyTripForecast(trip.StartDate, 22, 32, 5, 0, 23, 33),
+            new DailyTripForecast(trip.EndDate, 9, 18, 20, 3, 8, 17)
+        ]);
+
+        var outfits = OutfitRecommendationService.Create(trip, items, forecast);
+
+        outfits.Single(outfit => outfit.Date == trip.StartDate).Items.Select(item => item.Type).Should().NotContain([ClothingType.Sweater, ClothingType.Coat]);
+        outfits.Single(outfit => outfit.Date == trip.EndDate).Items.Select(item => item.Type).Should().Contain([ClothingType.Sweater, ClothingType.Coat]);
+    }
 }

@@ -2,7 +2,7 @@ namespace SmartPacking.Domain;
 
 public enum ClothingType { TShirt, Trousers, Shorts, Jacket, Shoes, Sandals, Accessory, Shirt, Sweater, Hoodie, Coat, Dress, Skirt, Underwear, Socks, Swimwear, Pyjamas, Belt, Bag }
 public enum Season { Summer, Winter, MidSeason, AllYear }
-public enum Style { Casual, Formal, Sport }
+public enum Style { Casual, Formal, Sport, Business }
 public enum TripActivity { Sightseeing, Beach, Hiking, Business, FormalEvent, Sport, Nightlife, Relaxation }
 public enum LuggageType { Backpack, Cabin, Checked }
 public enum TransportType { Car, Plane, Train, Bus, Cruise }

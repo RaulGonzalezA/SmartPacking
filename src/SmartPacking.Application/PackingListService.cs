@@ -7,7 +7,7 @@ public sealed record TripPackingPlan(Trip Trip, Guid PackingListId, IReadOnlyLis
 
 public sealed class PackingListService(ISmartPackingStore store)
 {
-    public async Task<TripPackingPlan?> GetOrCreateAsync(Guid userId, Guid tripId, CancellationToken cancellationToken)
+    public async Task<TripPackingPlan?> GetOrCreateAsync(Guid userId, Guid tripId, CancellationToken cancellationToken, TripWeatherForecast? forecast = null)
     {
         var trip = await store.GetTripAsync(userId, tripId, cancellationToken);
         if (trip is null)
@@ -16,7 +16,7 @@ public sealed class PackingListService(ISmartPackingStore store)
         }
 
         var wardrobe = await store.GetWardrobeAsync(userId, cancellationToken);
-        var recommendation = PackingRecommendationService.Recommend(trip, wardrobe);
+        var recommendation = PackingRecommendationService.Recommend(trip, wardrobe, forecast);
         var packingList = await store.GetPackingListAsync(userId, tripId, cancellationToken)
             ?? await store.SavePackingListAsync(
                 new PackingList(Guid.NewGuid(), trip.Id, userId, DateTimeOffset.UtcNow,
@@ -32,6 +32,6 @@ public sealed class PackingListService(ISmartPackingStore store)
                     ?? new RecommendedItem(wardrobeByItem[item.ClothingItemId], 0, ["retirada del armario; se conserva por ser una maleta existente"]),
                 item.IsPacked))
             .ToArray();
-        return new TripPackingPlan(trip, packingList.Id, items, items.Sum(item => item.Recommendation.Item.WeightGrams ?? 0), recommendation.MissingItems, OutfitRecommendationService.Create(trip, items));
+        return new TripPackingPlan(trip, packingList.Id, items, items.Sum(item => item.Recommendation.Item.WeightGrams ?? 0), recommendation.MissingItems, OutfitRecommendationService.Create(trip, items, forecast));
     }
 }
