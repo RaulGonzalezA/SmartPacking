@@ -1,6 +1,7 @@
 using System.Globalization;
 using SmartPacking.Client;
 using SmartPacking.Domain;
+using DomainStyle = SmartPacking.Domain.Style;
 
 namespace SmartPacking.Mobile;
 
@@ -63,12 +64,14 @@ public sealed class AddGarmentPage : ContentPage
         {
             ColumnDefinitions =
             {
-                new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Auto)
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto }
             }
         };
-        waterproofRow.Add(new Label { Text = "Impermeable", VerticalOptions = LayoutOptions.Center });
-        waterproofRow.Add(waterproofSwitch, 1);
+        var waterproofLabel = new Label { Text = "Impermeable", VerticalOptions = LayoutOptions.Center };
+        waterproofRow.Add(waterproofLabel);
+        waterproofRow.Add(waterproofSwitch);
+        Grid.SetColumn(waterproofSwitch, 1);
 
         saveButton = new Button { Text = "Guardar en el armario" };
         saveButton.Clicked += SaveClicked;
@@ -224,7 +227,7 @@ public sealed class AddGarmentPage : ContentPage
         statusLabel.Text = "Foto lista para analizar.";
     }
 
-    private void ApplySuggestion(Application.GarmentRecognitionSuggestion suggestion)
+    private void ApplySuggestion(SmartPacking.Application.GarmentRecognitionSuggestion suggestion)
     {
         var type = GarmentUiMappings.ParseCategory(suggestion.Category);
         var season = GarmentUiMappings.ParseSeason(suggestion.Seasons);
@@ -285,7 +288,7 @@ public sealed class AddGarmentPage : ContentPage
             color,
             (int)Math.Round(warmthSlider.Value),
             waterproofSwitch.IsToggled,
-            Selected(stylePicker, Style.Casual),
+            Selected(stylePicker, DomainStyle.Casual),
             weight,
             Material: materialEntry.Text?.Trim());
         validationMessage = string.Empty;

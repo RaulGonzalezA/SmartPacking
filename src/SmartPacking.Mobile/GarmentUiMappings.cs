@@ -1,4 +1,5 @@
 using SmartPacking.Domain;
+using DomainStyle = SmartPacking.Domain.Style;
 
 namespace SmartPacking.Mobile;
 
@@ -15,8 +16,8 @@ internal static class GarmentUiMappings
     public static IReadOnlyList<PickerOption<Season>> Seasons { get; } =
         Enum.GetValues<Season>().Select(value => new PickerOption<Season>(value, GetLabel(value))).ToArray();
 
-    public static IReadOnlyList<PickerOption<Style>> Styles { get; } =
-        Enum.GetValues<Style>().Select(value => new PickerOption<Style>(value, GetLabel(value))).ToArray();
+    public static IReadOnlyList<PickerOption<DomainStyle>> Styles { get; } =
+        Enum.GetValues<DomainStyle>().Select(value => new PickerOption<DomainStyle>(value, GetLabel(value))).ToArray();
 
     public static ClothingType ParseCategory(string category) => category.Trim() switch
     {
@@ -61,12 +62,12 @@ internal static class GarmentUiMappings
         return midSeason && !summer && !winter ? Season.MidSeason : Season.AllYear;
     }
 
-    public static Style ParseStyle(string style) => style.Trim() switch
+    public static DomainStyle ParseStyle(string style) => style.Trim() switch
     {
-        "Formal" => Style.Formal,
-        "Deportivo" => Style.Sport,
-        "Negocios" => Style.Business,
-        _ => Style.Casual
+        "Formal" => DomainStyle.Formal,
+        "Deportivo" => DomainStyle.Sport,
+        "Negocios" => DomainStyle.Business,
+        _ => DomainStyle.Casual
     };
 
     public static int EstimateWarmth(ClothingType type, Season season) => type switch
@@ -121,12 +122,12 @@ internal static class GarmentUiMappings
         _ => season.ToString()
     };
 
-    public static string GetLabel(Style style) => style switch
+    public static string GetLabel(DomainStyle style) => style switch
     {
-        Style.Casual => "Casual",
-        Style.Formal => "Formal",
-        Style.Sport => "Deportivo",
-        Style.Business => "Negocios",
+        DomainStyle.Casual => "Casual",
+        DomainStyle.Formal => "Formal",
+        DomainStyle.Sport => "Deportivo",
+        DomainStyle.Business => "Negocios",
         _ => style.ToString()
     };
 }
