@@ -10,6 +10,7 @@ public sealed class TripsPage : ContentPage
     private readonly IMobileAuthenticationService authentication;
     private readonly IServiceProvider services;
     private readonly VerticalStackLayout tripList;
+    private CancellationTokenSource? pageCancellation;
     private bool loading;
 
     public TripsPage(ISmartPackingClient client, IMobileAuthenticationService authentication, IServiceProvider services)
@@ -46,13 +47,20 @@ public sealed class TripsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await LoadAsync();
+        ResetPageCancellation();
+        await LoadAsync(PageToken);
+    }
+
+    protected override void OnDisappearing()
+    {
+        pageCancellation?.Cancel();
+        base.OnDisappearing();
     }
 
     private async void WardrobeClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(services.GetRequiredService<WardrobePage>());
 
-    private async void RefreshClicked(object? sender, EventArgs e) => await LoadAsync();
+    private async void RefreshClicked(object? sender, EventArgs e) => await LoadAsync(PageToken);
 
     private async void LogoutClicked(object? sender, EventArgs e)
     {
@@ -62,7 +70,7 @@ public sealed class TripsPage : ContentPage
         Navigation.RemovePage(this);
     }
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(CancellationToken cancellationToken)
     {
         if (loading)
         {
@@ -73,7 +81,8 @@ public sealed class TripsPage : ContentPage
         try
         {
             tripList.Clear();
-            var trips = await client.GetTripsAsync(CancellationToken.None);
+            var trips = await client.GetTripsAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             if (trips.Count == 0)
             {
                 tripList.Add(new Label { Text = "Todavía no tienes viajes." });
@@ -85,7 +94,10 @@ public sealed class TripsPage : ContentPage
                 tripList.Add(CreateTripCard(trip));
             }
         }
-        catch (HttpRequestException exception)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             tripList.Clear();
             tripList.Add(new Label { Text = $"No se pudieron cargar los viajes: {exception.Message}" });
@@ -105,5 +117,14 @@ public sealed class TripsPage : ContentPage
         };
         button.Clicked += async (_, _) => await Navigation.PushAsync(new TripDetailPage(client, trip));
         return button;
+    }
+
+    private CancellationToken PageToken => pageCancellation?.Token ?? CancellationToken.None;
+
+    private void ResetPageCancellation()
+    {
+        pageCancellation?.Cancel();
+        pageCancellation?.Dispose();
+        pageCancellation = new CancellationTokenSource();
     }
 }

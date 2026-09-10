@@ -33,7 +33,7 @@ Configura como callback URL:
 smartpacking://callback
 ```
 
-En `MobileOptions.cs` sustituye:
+En `MobileOptions.cs` sustituye los placeholders de la configuración correspondiente:
 
 ```text
 https://YOUR_AUTH0_DOMAIN/
@@ -42,17 +42,28 @@ YOUR_NATIVE_AUTH0_CLIENT_ID
 
 por el dominio y Client ID de la aplicación Native. El audience se mantiene en `https://smartpacking-api`.
 
-## API local desde Android Emulator
+## Configuración Debug y Release
 
-La configuración de desarrollo usa:
+`MobileOptions.Current` selecciona automáticamente la configuración según la compilación:
+
+- `Debug` usa `MobileOptions.Development`;
+- `Release` usa `MobileOptions.Production`.
+
+La configuración de desarrollo usa para Android Emulator:
 
 ```text
 http://10.0.2.2:8080/
 ```
 
-`10.0.2.2` es la dirección que Android Emulator utiliza para acceder al host. El manifest permite HTTP sin TLS únicamente para desarrollo local. Antes de una build de distribución, usa HTTPS y elimina `android:usesCleartextTraffic="true"`.
+`10.0.2.2` es la dirección que Android Emulator utiliza para acceder al host. El tráfico HTTP sin TLS se habilita **solo en Debug** mediante `[Application(UsesCleartextTraffic = true)]`. El manifest base no permite cleartext y las compilaciones `Release` exigen HTTPS para la API y Auth0.
 
-En un dispositivo físico cambia `ApiBaseAddress` por una URL de la API accesible desde el teléfono.
+Antes de distribuir una build `Release`, sustituye también:
+
+```text
+https://YOUR_API_HOST/
+```
+
+por la URL HTTPS real de la API. En un dispositivo físico de desarrollo usa igualmente una URL de API accesible desde el teléfono.
 
 ## Cámara y fotografías
 
@@ -64,7 +75,9 @@ Antes de enviarla a Gemini o almacenarla, la fotografía se decodifica en el dis
 - calidad JPEG: 82;
 - el nuevo JPEG no conserva los metadatos EXIF del fichero original.
 
-La misma fotografía optimizada se reutiliza para el reconocimiento y para el almacenamiento del armario, evitando enviar dos versiones grandes de la imagen.
+La decodificación usa `InJustDecodeBounds` e `InSampleSize` para evitar cargar fotografías grandes a resolución completa. La misma fotografía optimizada se reutiliza para el reconocimiento y para el almacenamiento del armario.
+
+Si la prenda se crea correctamente pero falla la subida de la fotografía, la pantalla conserva el identificador de la prenda y permite reintentar **solo** la fotografía, evitando crear duplicados.
 
 ## Ejecutar
 
@@ -88,7 +101,8 @@ También puedes seleccionar `SmartPacking.Mobile` como proyecto de inicio desde 
 Para siguientes iteraciones quedan, entre otras mejoras:
 
 - edición y borrado de prendas desde móvil;
-- carga progresiva/paginación del armario;
+- carga progresiva/paginación del armario y miniaturas;
+- renovación de sesión con refresh token rotation;
 - SQLite y funcionamiento offline;
 - sincronización incremental;
 - notificaciones de cambios meteorológicos y preparación del viaje;

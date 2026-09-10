@@ -36,7 +36,7 @@ public sealed class SmartPackingClient(HttpClient httpClient) : ISmartPackingCli
         return result?.Data.Select(ToClothingItem).ToArray() ?? [];
     }
 
-    public async Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(ReadOnlyMemory<byte> jpegPhoto, string fileName, CancellationToken cancellationToken)
+    public async Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(byte[] jpegPhoto, string fileName, CancellationToken cancellationToken)
     {
         using var content = CreatePhotoContent(jpegPhoto, fileName);
         using var response = await httpClient.PostAsync("api/wardrobe/recognition", content, cancellationToken);
@@ -69,7 +69,7 @@ public sealed class SmartPackingClient(HttpClient httpClient) : ISmartPackingCli
         return ToClothingItem(result.Data);
     }
 
-    public async Task UploadClothingPhotoAsync(Guid clothingItemId, ReadOnlyMemory<byte> jpegPhoto, string fileName, CancellationToken cancellationToken)
+    public async Task UploadClothingPhotoAsync(Guid clothingItemId, byte[] jpegPhoto, string fileName, CancellationToken cancellationToken)
     {
         using var content = CreatePhotoContent(jpegPhoto, fileName);
         using var response = await httpClient.PostAsync($"api/wardrobe/{clothingItemId}/photo", content, cancellationToken);
@@ -88,10 +88,10 @@ public sealed class SmartPackingClient(HttpClient httpClient) : ISmartPackingCli
         return await response.Content.ReadAsByteArrayAsync(cancellationToken);
     }
 
-    private static MultipartFormDataContent CreatePhotoContent(ReadOnlyMemory<byte> jpegPhoto, string fileName)
+    private static MultipartFormDataContent CreatePhotoContent(byte[] jpegPhoto, string fileName)
     {
         var content = new MultipartFormDataContent();
-        var photoContent = new ByteArrayContent(jpegPhoto.ToArray());
+        var photoContent = new ByteArrayContent(jpegPhoto);
         photoContent.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
         content.Add(photoContent, "photo", string.IsNullOrWhiteSpace(fileName) ? "garment.jpg" : fileName);
         return content;

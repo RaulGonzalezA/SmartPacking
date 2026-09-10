@@ -10,7 +10,8 @@ public static class MauiProgram
         var builder = MauiApp.CreateBuilder();
         builder.UseMauiApp<App>();
 
-        var options = MobileOptions.Development;
+        var options = MobileOptions.Current;
+        options.Validate();
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton<SecureAccessTokenProvider>();
         builder.Services.AddSingleton<IAccessTokenProvider>(provider => provider.GetRequiredService<SecureAccessTokenProvider>());

@@ -53,7 +53,7 @@ public sealed class MobileAuthenticationService(MobileOptions options, IAccessTo
 
     public async Task LoginAsync(CancellationToken cancellationToken)
     {
-        EnsureConfigured();
+        options.Validate();
         var verifier = Base64Url(RandomNumberGenerator.GetBytes(32));
         var challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         var state = Base64Url(RandomNumberGenerator.GetBytes(32));
@@ -103,22 +103,18 @@ public sealed class MobileAuthenticationService(MobileOptions options, IAccessTo
             throw new InvalidOperationException("Auth0 no devolvió access_token.");
         }
 
-        await SecureAccessTokenProvider.SaveAsync(token.AccessToken, Math.Max(60, token.ExpiresIn));
+        if (token.ExpiresIn <= 0)
+        {
+            throw new InvalidOperationException("Auth0 devolvió expires_in no válido.");
+        }
+
+        await SecureAccessTokenProvider.SaveAsync(token.AccessToken, token.ExpiresIn);
     }
 
     public Task LogoutAsync()
     {
         SecureAccessTokenProvider.Clear();
         return Task.CompletedTask;
-    }
-
-    private void EnsureConfigured()
-    {
-        if (options.Auth0Authority.Contains("YOUR_AUTH0_DOMAIN", StringComparison.Ordinal) ||
-            options.Auth0ClientId.Contains("YOUR_NATIVE_AUTH0_CLIENT_ID", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException("Configura Auth0Authority y Auth0ClientId de la aplicación Native de Auth0 en MobileOptions.");
-        }
     }
 
     private static string Base64Url(byte[] value) => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');

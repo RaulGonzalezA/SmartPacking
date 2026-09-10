@@ -11,9 +11,9 @@ public interface ISmartPackingClient
     Task<TripDashboard?> GetTripDashboardAsync(Guid tripId, Guid? selectedProfileId, CancellationToken cancellationToken);
     Task SetChecklistPackedAsync(Guid itemId, bool isPacked, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(CancellationToken cancellationToken);
-    Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(ReadOnlyMemory<byte> jpegPhoto, string fileName, CancellationToken cancellationToken);
+    Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(byte[] jpegPhoto, string fileName, CancellationToken cancellationToken);
     Task<ClothingItem> CreateClothingItemAsync(CreateClothingItemRequest request, CancellationToken cancellationToken);
-    Task UploadClothingPhotoAsync(Guid clothingItemId, ReadOnlyMemory<byte> jpegPhoto, string fileName, CancellationToken cancellationToken);
+    Task UploadClothingPhotoAsync(Guid clothingItemId, byte[] jpegPhoto, string fileName, CancellationToken cancellationToken);
     Task<byte[]?> GetClothingPhotoAsync(Guid clothingItemId, CancellationToken cancellationToken);
 }
 

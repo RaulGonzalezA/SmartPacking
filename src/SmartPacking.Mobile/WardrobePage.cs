@@ -10,6 +10,7 @@ public sealed class WardrobePage : ContentPage
     private readonly IServiceProvider services;
     private readonly CollectionView wardrobeView;
     private readonly Label statusLabel;
+    private CancellationTokenSource? pageCancellation;
     private bool loading;
 
     public WardrobePage(ISmartPackingClient client, IServiceProvider services)
@@ -75,15 +76,22 @@ public sealed class WardrobePage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await LoadAsync();
+        ResetPageCancellation();
+        await LoadAsync(PageToken);
+    }
+
+    protected override void OnDisappearing()
+    {
+        pageCancellation?.Cancel();
+        base.OnDisappearing();
     }
 
     private async void AddGarmentClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(services.GetRequiredService<AddGarmentPage>());
 
-    private async void RefreshClicked(object? sender, EventArgs e) => await LoadAsync();
+    private async void RefreshClicked(object? sender, EventArgs e) => await LoadAsync(PageToken);
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(CancellationToken cancellationToken)
     {
         if (loading)
         {
@@ -94,16 +102,20 @@ public sealed class WardrobePage : ContentPage
         statusLabel.Text = "Cargando armario...";
         try
         {
-            var wardrobe = await client.GetWardrobeAsync(CancellationToken.None);
+            var wardrobe = await client.GetWardrobeAsync(cancellationToken);
             using var gate = new SemaphoreSlim(4);
             var models = await Task.WhenAll(wardrobe
                 .OrderBy(item => item.Type)
                 .ThenBy(item => item.Name)
-                .Select(item => CreateViewModelAsync(item, gate, CancellationToken.None)));
+                .Select(item => CreateViewModelAsync(item, gate, cancellationToken)));
+            cancellationToken.ThrowIfCancellationRequested();
             wardrobeView.ItemsSource = models;
             statusLabel.Text = $"{models.Length} prendas";
         }
-        catch (HttpRequestException exception)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             wardrobeView.ItemsSource = null;
             statusLabel.Text = $"No se pudo cargar el armario: {exception.Message}";
@@ -202,5 +214,14 @@ public sealed class WardrobePage : ContentPage
         public string Description { get; }
         public string Status { get; }
         public ImageSource? Photo { get; }
+    }
+
+    private CancellationToken PageToken => pageCancellation?.Token ?? CancellationToken.None;
+
+    private void ResetPageCancellation()
+    {
+        pageCancellation?.Cancel();
+        pageCancellation?.Dispose();
+        pageCancellation = new CancellationTokenSource();
     }
 }

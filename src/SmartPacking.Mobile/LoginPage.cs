@@ -9,6 +9,7 @@ public sealed class LoginPage : ContentPage
     private readonly ISmartPackingClient client;
     private readonly IServiceProvider services;
     private readonly Label status;
+    private CancellationTokenSource? pageCancellation;
     private bool initialized;
 
     public LoginPage(IMobileAuthenticationService authentication, ISmartPackingClient client, IServiceProvider services)
@@ -43,6 +44,7 @@ public sealed class LoginPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        ResetPageCancellation();
         if (initialized)
         {
             return;
@@ -51,11 +53,14 @@ public sealed class LoginPage : ContentPage
         initialized = true;
         try
         {
-            if (await authentication.HasSessionAsync(CancellationToken.None))
+            if (await authentication.HasSessionAsync(PageToken))
             {
-                await client.GetCurrentUserAsync(CancellationToken.None);
+                await client.GetCurrentUserAsync(PageToken);
                 await OpenTripsAsync();
             }
+        }
+        catch (OperationCanceledException) when (PageToken.IsCancellationRequested)
+        {
         }
         catch (HttpRequestException)
         {
@@ -64,13 +69,20 @@ public sealed class LoginPage : ContentPage
         }
     }
 
+    protected override void OnDisappearing()
+    {
+        pageCancellation?.Cancel();
+        base.OnDisappearing();
+    }
+
     private async void LoginClicked(object? sender, EventArgs e)
     {
         try
         {
             status.Text = "Abriendo Auth0…";
-            await authentication.LoginAsync(CancellationToken.None);
-            await client.GetCurrentUserAsync(CancellationToken.None);
+            using var authenticationCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            await authentication.LoginAsync(authenticationCancellation.Token);
+            await client.GetCurrentUserAsync(PageToken);
             await OpenTripsAsync();
         }
         catch (InvalidOperationException exception)
@@ -92,5 +104,14 @@ public sealed class LoginPage : ContentPage
         var tripsPage = services.GetRequiredService<TripsPage>();
         await Navigation.PushAsync(tripsPage);
         Navigation.RemovePage(this);
+    }
+
+    private CancellationToken PageToken => pageCancellation?.Token ?? CancellationToken.None;
+
+    private void ResetPageCancellation()
+    {
+        pageCancellation?.Cancel();
+        pageCancellation?.Dispose();
+        pageCancellation = new CancellationTokenSource();
     }
 }

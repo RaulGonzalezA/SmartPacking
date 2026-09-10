@@ -25,6 +25,7 @@ public sealed class MobilePhotoService : IMobilePhotoService
     {
         cancellationToken.ThrowIfCancellationRequested();
         var file = await MediaPicker.Default.CapturePhotoAsync();
+        cancellationToken.ThrowIfCancellationRequested();
         return file is null ? null : await PrepareAsync(file, cancellationToken);
     }
 
@@ -42,14 +43,20 @@ public sealed class MobilePhotoService : IMobilePhotoService
         await using var source = await file.OpenReadAsync();
         using var input = new MemoryStream();
         await source.CopyToAsync(input, cancellationToken);
-        var sourceBytes = input.ToArray();
-        return await Task.Run(() => Optimize(sourceBytes), cancellationToken);
+        if (!input.TryGetBuffer(out var sourceBuffer) || sourceBuffer.Array is null)
+        {
+            throw new InvalidOperationException("No se ha podido preparar la imagen seleccionada.");
+        }
+
+        return await Task.Run(
+            () => Optimize(sourceBuffer.Array, sourceBuffer.Offset, sourceBuffer.Count),
+            cancellationToken);
     }
 
-    private static PreparedPhoto Optimize(byte[] sourceBytes)
+    private static PreparedPhoto Optimize(byte[] sourceBytes, int offset, int length)
     {
         using var boundsOptions = new BitmapFactory.Options { InJustDecodeBounds = true };
-        _ = BitmapFactory.DecodeByteArray(sourceBytes, 0, sourceBytes.Length, boundsOptions);
+        _ = BitmapFactory.DecodeByteArray(sourceBytes, offset, length, boundsOptions);
         if (boundsOptions.OutWidth <= 0 || boundsOptions.OutHeight <= 0)
         {
             throw new InvalidOperationException("No se han podido obtener las dimensiones de la imagen seleccionada.");
@@ -59,7 +66,7 @@ public sealed class MobilePhotoService : IMobilePhotoService
         {
             InSampleSize = CalculateInSampleSize(boundsOptions.OutWidth, boundsOptions.OutHeight)
         };
-        using var bitmap = BitmapFactory.DecodeByteArray(sourceBytes, 0, sourceBytes.Length, decodeOptions)
+        using var bitmap = BitmapFactory.DecodeByteArray(sourceBytes, offset, length, decodeOptions)
             ?? throw new InvalidOperationException("No se ha podido leer la imagen seleccionada.");
 
         Bitmap? resized = null;
