@@ -176,20 +176,20 @@ public sealed class WardrobePage : ContentPage
 
     private sealed class WardrobeItemViewModel
     {
-        private readonly byte[]? photoBytes;
-
         public WardrobeItemViewModel(ClothingItem item, byte[]? photoBytes)
         {
-            this.photoBytes = photoBytes;
             Name = item.Name;
             Description = $"{GarmentUiMappings.GetLabel(item.Type)} · {item.Color} · {GarmentUiMappings.GetLabel(item.Style)}" +
                 (string.IsNullOrWhiteSpace(item.Material) ? string.Empty : $" · {item.Material}");
             Status = $"{GarmentUiMappings.GetLabel(item.Season)} · {(item.IsClean ? "Limpia" : "Para lavar")} · {(item.IsAvailable ? "Disponible" : "No disponible")}";
+            Photo = photoBytes is null
+                ? null
+                : ImageSource.FromStream(() => new MemoryStream(photoBytes, writable: false));
         }
 
         public string Name { get; }
         public string Description { get; }
         public string Status { get; }
-        public ImageSource? Photo => photoBytes is null ? null : ImageSource.FromStream(() => new MemoryStream(photoBytes, writable: false));
+        public ImageSource? Photo { get; }
     }
 }

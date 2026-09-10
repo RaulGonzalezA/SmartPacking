@@ -101,7 +101,15 @@ public sealed class TripDetailPage : ContentPage
         {
             var checkBox = new CheckBox { IsChecked = item.IsPacked };
             var label = new Label { Text = item.Name, VerticalTextAlignment = TextAlignment.Center };
-            checkBox.CheckedChanged += async (_, args) => await SetChecklistAsync(item, args.Value, checkBox);
+            checkBox.CheckedChanged += async (_, args) =>
+            {
+                if (!checkBox.IsEnabled)
+                {
+                    return;
+                }
+
+                await SetChecklistAsync(item, args.Value, checkBox);
+            };
             content.Add(new HorizontalStackLayout { Spacing = 10, Children = { checkBox, label } });
         }
     }

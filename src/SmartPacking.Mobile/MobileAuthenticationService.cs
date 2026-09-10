@@ -56,6 +56,7 @@ public sealed class MobileAuthenticationService(MobileOptions options, IAccessTo
         EnsureConfigured();
         var verifier = Base64Url(RandomNumberGenerator.GetBytes(32));
         var challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var state = Base64Url(RandomNumberGenerator.GetBytes(32));
         var callback = new Uri(options.RedirectUri);
         var authorizationUri = new Uri(
             $"{options.Auth0Authority.TrimEnd('/')}/authorize" +
@@ -65,9 +66,16 @@ public sealed class MobileAuthenticationService(MobileOptions options, IAccessTo
             $"&audience={Uri.EscapeDataString(options.Auth0Audience)}" +
             "&scope=openid%20profile%20email" +
             $"&code_challenge={Uri.EscapeDataString(challenge)}" +
-            "&code_challenge_method=S256");
+            "&code_challenge_method=S256" +
+            $"&state={Uri.EscapeDataString(state)}");
 
         var result = await WebAuthenticator.Default.AuthenticateAsync(authorizationUri, callback, cancellationToken);
+        if (!result.Properties.TryGetValue("state", out var returnedState)
+            || !string.Equals(returnedState, state, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Auth0 devolvió un estado de autenticación no válido.");
+        }
+
         if (!result.Properties.TryGetValue("code", out var code) || string.IsNullOrWhiteSpace(code))
         {
             throw new InvalidOperationException("Auth0 no devolvió el código de autorización.");

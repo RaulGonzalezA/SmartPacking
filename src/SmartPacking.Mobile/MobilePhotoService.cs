@@ -48,8 +48,18 @@ public sealed class MobilePhotoService : IMobilePhotoService
 
     private static PreparedPhoto Optimize(byte[] sourceBytes)
     {
-        using var source = new MemoryStream(sourceBytes, writable: false);
-        using var bitmap = BitmapFactory.DecodeStream(source)
+        using var boundsOptions = new BitmapFactory.Options { InJustDecodeBounds = true };
+        _ = BitmapFactory.DecodeByteArray(sourceBytes, 0, sourceBytes.Length, boundsOptions);
+        if (boundsOptions.OutWidth <= 0 || boundsOptions.OutHeight <= 0)
+        {
+            throw new InvalidOperationException("No se han podido obtener las dimensiones de la imagen seleccionada.");
+        }
+
+        using var decodeOptions = new BitmapFactory.Options
+        {
+            InSampleSize = CalculateInSampleSize(boundsOptions.OutWidth, boundsOptions.OutHeight)
+        };
+        using var bitmap = BitmapFactory.DecodeByteArray(sourceBytes, 0, sourceBytes.Length, decodeOptions)
             ?? throw new InvalidOperationException("No se ha podido leer la imagen seleccionada.");
 
         Bitmap? resized = null;
@@ -84,5 +94,16 @@ public sealed class MobilePhotoService : IMobilePhotoService
         {
             resized?.Dispose();
         }
+    }
+
+    private static int CalculateInSampleSize(int width, int height)
+    {
+        var sampleSize = 1;
+        while (width / (sampleSize * 2) >= MaxDimension || height / (sampleSize * 2) >= MaxDimension)
+        {
+            sampleSize *= 2;
+        }
+
+        return sampleSize;
     }
 }
