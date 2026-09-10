@@ -91,7 +91,7 @@ public sealed class TripsPage : ContentPage
         }
     }
 
-    private View CreateTripCard(Trip trip)
+    private Button CreateTripCard(Trip trip)
     {
         var button = new Button
         {

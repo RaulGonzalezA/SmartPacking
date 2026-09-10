@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -21,7 +22,8 @@ public sealed class SecureAccessTokenProvider : IAccessTokenProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
         var expiresAtText = await SecureStorage.Default.GetAsync(ExpiresAtKey);
-        if (!DateTimeOffset.TryParse(expiresAtText, out var expiresAt) || expiresAt <= DateTimeOffset.UtcNow.AddSeconds(30))
+        if (!DateTimeOffset.TryParseExact(expiresAtText, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var expiresAt)
+            || expiresAt <= DateTimeOffset.UtcNow.AddSeconds(30))
         {
             return null;
         }
@@ -32,7 +34,9 @@ public sealed class SecureAccessTokenProvider : IAccessTokenProvider
     public static async Task SaveAsync(string accessToken, int expiresInSeconds)
     {
         await SecureStorage.Default.SetAsync(AccessTokenKey, accessToken);
-        await SecureStorage.Default.SetAsync(ExpiresAtKey, DateTimeOffset.UtcNow.AddSeconds(expiresInSeconds).ToString("O"));
+        await SecureStorage.Default.SetAsync(
+            ExpiresAtKey,
+            DateTimeOffset.UtcNow.AddSeconds(expiresInSeconds).ToString("O", CultureInfo.InvariantCulture));
     }
 
     public static void Clear()
@@ -63,8 +67,7 @@ public sealed class MobileAuthenticationService(MobileOptions options, IAccessTo
             $"&code_challenge={Uri.EscapeDataString(challenge)}" +
             "&code_challenge_method=S256");
 
-        var result = await WebAuthenticator.Default.AuthenticateAsync(authorizationUri, callback);
-        cancellationToken.ThrowIfCancellationRequested();
+        var result = await WebAuthenticator.Default.AuthenticateAsync(authorizationUri, callback, cancellationToken);
         if (!result.Properties.TryGetValue("code", out var code) || string.IsNullOrWhiteSpace(code))
         {
             throw new InvalidOperationException("Auth0 no devolvió el código de autorización.");
