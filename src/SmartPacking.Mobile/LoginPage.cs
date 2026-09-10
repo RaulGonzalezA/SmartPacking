@@ -61,7 +61,7 @@ public sealed class LoginPage : ContentPage
         }
         catch (OperationCanceledException) when (pageCancellation.Token.IsCancellationRequested)
         {
-            return;
+            initialized = false;
         }
         catch (HttpRequestException)
         {
