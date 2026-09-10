@@ -15,6 +15,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<SecureAccessTokenProvider>();
         builder.Services.AddSingleton<IAccessTokenProvider>(provider => provider.GetRequiredService<SecureAccessTokenProvider>());
         builder.Services.AddSingleton<IMobileAuthenticationService, MobileAuthenticationService>();
+        builder.Services.AddSingleton<IMobilePhotoService, MobilePhotoService>();
         builder.Services.AddSingleton<ISmartPackingClient>(provider =>
         {
             var bearer = new BearerTokenHandler(provider.GetRequiredService<IAccessTokenProvider>())
@@ -26,6 +27,8 @@ public static class MauiProgram
         });
         builder.Services.AddTransient<LoginPage>();
         builder.Services.AddTransient<TripsPage>();
+        builder.Services.AddTransient<WardrobePage>();
+        builder.Services.AddTransient<AddGarmentPage>();
 
         return builder.Build();
     }

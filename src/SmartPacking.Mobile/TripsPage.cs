@@ -19,6 +19,8 @@ public sealed class TripsPage : ContentPage
         this.services = services;
         Title = "Mis viajes";
 
+        var wardrobeButton = new Button { Text = "Armario" };
+        wardrobeButton.Clicked += WardrobeClicked;
         var refreshButton = new Button { Text = "Actualizar" };
         refreshButton.Clicked += RefreshClicked;
         var logoutButton = new Button { Text = "Cerrar sesión" };
@@ -34,7 +36,7 @@ public sealed class TripsPage : ContentPage
                 Children =
                 {
                     new Label { Text = "Mis viajes", FontSize = 28, FontAttributes = FontAttributes.Bold },
-                    new HorizontalStackLayout { Spacing = 10, Children = { refreshButton, logoutButton } },
+                    new HorizontalStackLayout { Spacing = 10, Children = { wardrobeButton, refreshButton, logoutButton } },
                     tripList
                 }
             }
@@ -46,6 +48,9 @@ public sealed class TripsPage : ContentPage
         base.OnAppearing();
         await LoadAsync();
     }
+
+    private async void WardrobeClicked(object? sender, EventArgs e) =>
+        await Navigation.PushAsync(services.GetRequiredService<WardrobePage>());
 
     private async void RefreshClicked(object? sender, EventArgs e) => await LoadAsync();
 

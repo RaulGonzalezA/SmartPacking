@@ -1,8 +1,8 @@
-# SmartPacking Mobile · Iteración 1
+# SmartPacking Mobile · Iteración 2
 
-Primer vertical slice móvil de SmartPacking con .NET MAUI para Android.
+Segundo vertical slice móvil de SmartPacking con .NET MAUI para Android.
 
-Incluye:
+Incluye lo de la iteración 1:
 
 - autenticación Auth0 mediante Authorization Code + PKCE;
 - almacenamiento seguro del access token;
@@ -11,6 +11,17 @@ Incluye:
 - previsión y progreso de preparación;
 - checklist interactivo;
 - cliente HTTP compartible en `SmartPacking.Client`.
+
+Y añade en esta iteración:
+
+- acceso al armario desde la pantalla de viajes;
+- listado de prendas con fotografía privada obtenida mediante la API autenticada;
+- captura de prendas con la cámara;
+- selección de fotografías desde la galería;
+- optimización local de la imagen antes de subirla: máximo 1280 px y JPEG al 82 %;
+- análisis de la fotografía con Gemini;
+- formulario de confirmación/corrección de la propuesta de Gemini;
+- creación de la prenda y subida posterior de su fotografía optimizada.
 
 ## Configuración Auth0
 
@@ -39,9 +50,21 @@ La configuración de desarrollo usa:
 http://10.0.2.2:8080/
 ```
 
-`10.0.2.2` es la dirección que Android Emulator utiliza para acceder al host. El manifest permite HTTP sin TLS únicamente para facilitar esta primera iteración local. Antes de una build de distribución, usa HTTPS y elimina `android:usesCleartextTraffic="true"`.
+`10.0.2.2` es la dirección que Android Emulator utiliza para acceder al host. El manifest permite HTTP sin TLS únicamente para desarrollo local. Antes de una build de distribución, usa HTTPS y elimina `android:usesCleartextTraffic="true"`.
 
 En un dispositivo físico cambia `ApiBaseAddress` por una URL de la API accesible desde el teléfono.
+
+## Cámara y fotografías
+
+El proyecto declara el permiso Android `CAMERA`. `MediaPicker` se utiliza tanto para captura como para selección de imágenes.
+
+Antes de enviarla a Gemini o almacenarla, la fotografía se decodifica en el dispositivo y se vuelve a generar como JPEG:
+
+- dimensión máxima: 1280 px;
+- calidad JPEG: 82;
+- el nuevo JPEG no conserva los metadatos EXIF del fichero original.
+
+La misma fotografía optimizada se reutiliza para el reconocimiento y para el almacenamiento del armario, evitando enviar dos versiones grandes de la imagen.
 
 ## Ejecutar
 
@@ -62,4 +85,11 @@ También puedes seleccionar `SmartPacking.Mobile` como proyecto de inicio desde 
 
 ## Alcance pendiente
 
-La siguiente iteración debería incorporar armario + cámara + análisis de prenda. Offline/SQLite, sincronización y notificaciones quedan deliberadamente fuera de este primer vertical slice.
+Para siguientes iteraciones quedan, entre otras mejoras:
+
+- edición y borrado de prendas desde móvil;
+- carga progresiva/paginación del armario;
+- SQLite y funcionamiento offline;
+- sincronización incremental;
+- notificaciones de cambios meteorológicos y preparación del viaje;
+- soporte iOS cuando se incorpore el target correspondiente.
