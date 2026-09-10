@@ -94,13 +94,9 @@ public partial class AdminPanel
             await LoadAsync();
             success = confirmation;
         }
-        catch (ApiProblemException exception)
+        catch (Exception exception)
         {
-            error = exception.Message;
-        }
-        catch (HttpRequestException)
-        {
-            error = "No se ha podido guardar el cambio. Inténtalo de nuevo.";
+            error = ApiOperationResult.FromException(exception).Message;
         }
         finally
         {

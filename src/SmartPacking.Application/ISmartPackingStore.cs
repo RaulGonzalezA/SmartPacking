@@ -18,6 +18,7 @@ public interface ISmartPackingStore
     Task SetTripProfilesAsync(Guid userId, Guid tripId, IReadOnlyCollection<Guid> profileIds, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(Guid userId, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClothingItem>> GetWardrobePageAsync(Guid userId, bool isDeleted, int page, int pageSize, CancellationToken cancellationToken);
+    Task<WardrobeSnapshot> GetWardrobeCollectionAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken);
     Task<ClothingItem> AddClothingItemAsync(Guid userId, ClothingItem item, CancellationToken cancellationToken);
     Task<bool> DeleteClothingItemAsync(Guid userId, Guid clothingItemId, CancellationToken cancellationToken);
     Task<bool> RestoreClothingItemAsync(Guid userId, Guid clothingItemId, CancellationToken cancellationToken);

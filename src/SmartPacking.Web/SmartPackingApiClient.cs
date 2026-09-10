@@ -73,11 +73,17 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
     public async Task<IReadOnlyList<FamilyProfile>> GetTripProfilesAsync(Guid tripId, CancellationToken cancellationToken) =>
         await httpClient.GetFromJsonAsync<FamilyProfile[]>($"api/trips/{tripId}/profiles", cancellationToken) ?? [];
 
-    public async Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(bool deleted, CancellationToken cancellationToken)
+    public Task<TripDashboard?> GetTripDashboardAsync(Guid tripId, Guid selectedProfileId, CancellationToken cancellationToken) =>
+        httpClient.GetFromJsonAsync<TripDashboard>($"api/trips/{tripId}/dashboard?profileId={selectedProfileId}", cancellationToken);
+
+    public async Task<WardrobeSnapshot> GetWardrobeCollectionAsync(CancellationToken cancellationToken)
     {
-        var path = deleted ? "api/wardrobe/deleted" : "api/wardrobe";
-        var result = await httpClient.GetFromJsonAsync<ApiResult<ClothingItemDto[]>>(path, cancellationToken);
-        return result?.Data.Select(item => item.ToDomain()).ToArray() ?? [];
+        var result = await httpClient.GetFromJsonAsync<WardrobeCollectionDto>("api/wardrobe?includeDeleted=true", cancellationToken);
+        return new WardrobeSnapshot(
+            result?.Items.Select(item => item.ToDomain()).ToArray() ?? [],
+            result?.DeletedItems.Select(item => item.ToDomain()).ToArray() ?? [],
+            result?.Page ?? 1,
+            result?.PageSize ?? 100);
     }
 
     public async Task<ProfileTripPackingPlan?> GetProfilePackingListAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken) =>
@@ -88,28 +94,19 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
 
     public async Task<TripWeatherForecast?> GetWeatherAsync(Guid tripId, CancellationToken cancellationToken)
     {
-        try
-        {
-            using var response = await httpClient.GetAsync($"api/trips/{tripId}/weather", cancellationToken);
-            response.EnsureSuccessStatusCode();
-            var weather = await response.Content.ReadFromJsonAsync<WeatherForecastDto>(cancellationToken);
-            return weather is null
-                ? null
-                : new TripWeatherForecast(
-                    weather.Destination,
-                    weather.MinimumCelsius,
-                    weather.MaximumCelsius,
-                    weather.RainProbability,
-                    weather.StartDate,
-                    weather.EndDate,
-                    weather.Daily.Select(day => new DailyTripForecast(day.Date, day.MinimumCelsius, day.MaximumCelsius, day.RainProbability, day.WeatherCode, day.ApparentMinimumCelsius, day.ApparentMaximumCelsius, day.WindSpeedKilometresPerHour)).ToArray());
-        }
-        catch (ApiProblemException exception) when (exception.StatusCode is StatusCodes.Status404NotFound
-            or StatusCodes.Status422UnprocessableEntity
-            or StatusCodes.Status503ServiceUnavailable)
-        {
-            return null;
-        }
+        using var response = await httpClient.GetAsync($"api/trips/{tripId}/weather", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var weather = await response.Content.ReadFromJsonAsync<WeatherForecastDto>(cancellationToken);
+        return weather is null
+            ? null
+            : new TripWeatherForecast(
+                weather.Destination,
+                weather.MinimumCelsius,
+                weather.MaximumCelsius,
+                weather.RainProbability,
+                weather.StartDate,
+                weather.EndDate,
+                weather.Daily.Select(day => new DailyTripForecast(day.Date, day.MinimumCelsius, day.MaximumCelsius, day.RainProbability, day.WeatherCode, day.ApparentMinimumCelsius, day.ApparentMaximumCelsius, day.WindSpeedKilometresPerHour)).ToArray());
     }
 
     public async Task<LuggageRulesSummary?> GetLuggageRulesAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken) =>
@@ -218,6 +215,8 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
     {
         public ClothingItem ToDomain() => new(Id, Name, Type, Season, Color, WarmthLevel, Waterproof, Style, WeightGrams, IsClean, IsAvailable, PreferenceScore, CombinesWith, IsDeleted, OwnerProfileId, PhotoUrl, Material);
     }
+
+    private sealed record WardrobeCollectionDto(ClothingItemDto[] Items, ClothingItemDto[] DeletedItems, int Page, int PageSize);
 
     private static Trip ToTrip(TripResponse trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, trip.Activities.Select(activity => (Style)activity).ToArray(), trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (LuggageType)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, trip.DayPlans?.Select(plan => new TripDayPlan(plan.Date, plan.Activities.Select(activity => (TripActivity)activity).ToArray())).ToArray(), trip.AirlineCode, trip.TransportTypes?.Select(type => (TransportType)type).ToArray(), trip.Luggages?.Select(luggage => new TripLuggage(luggage.Id, (LuggageType)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray(), trip.Origin, trip.TransportPlan is null ? null : new TransportPlan(trip.TransportPlan.Summary, trip.TransportPlan.Legs.Select(leg => new TransportLeg((TransportType)leg.Type, leg.From, leg.To, leg.EstimatedMinutes, leg.Description)).ToArray()));
     private static SaveTripRequest ToRequest(Trip trip) => new(trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, trip.Activities.Select(activity => (int)activity).ToArray(), trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (int)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, trip.DayPlansOrEmpty.Select(plan => new TripDayPlanContract(plan.Date, plan.Activities.Select(activity => (int)activity).ToArray())).ToArray(), trip.AirlineCode, trip.TransportTypesOrEmpty.Select(type => (int)type).ToArray(), trip.LuggagesOrDefault.Select(luggage => new TripLuggageContract(luggage.Id, (int)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray(), trip.Origin);

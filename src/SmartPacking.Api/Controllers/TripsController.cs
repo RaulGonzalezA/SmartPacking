@@ -88,6 +88,60 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
         return plan is null ? NotFoundProblem(viajeNoEncontrado) : Ok(plan);
     }
 
+    [HttpGet("{tripId:guid}/dashboard")]
+    [ProducesResponseType(typeof(TripDashboard), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TripDashboard>> GetDashboardAsync(Guid tripId, [FromQuery] Guid? profileId, CancellationToken cancellationToken)
+    {
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        var trip = await store.GetTripAsync(user.Id, tripId, cancellationToken);
+        if (trip is null)
+        {
+            return NotFoundProblem(viajeNoEncontrado);
+        }
+
+        var profiles = await store.GetTripProfilesAsync(user.Id, tripId, cancellationToken);
+        var selectedProfileId = Guid.Empty;
+        if (profiles.Any(profile => profile.Id == profileId))
+        {
+            selectedProfileId = profileId!.Value;
+        }
+        else if (profiles.Count > 0)
+        {
+            selectedProfileId = profiles[0].Id;
+        }
+        var familyPlans = new List<ProfileTripPackingPlan>();
+        var progress = new List<PreparationProgressItem>();
+        IReadOnlyList<ChecklistItem> selectedChecklist = [];
+
+        foreach (var profile in profiles)
+        {
+            var plan = await profilePackingLists.GetOrCreateAsync(user.Id, tripId, profile.Id, cancellationToken);
+            var checklist = await GetOrCreateProfileChecklistAsync(user.Id, tripId, profile.Id, cancellationToken);
+            if (plan is not null)
+            {
+                familyPlans.Add(plan);
+            }
+
+            progress.Add(new PreparationProgressItem(
+                profile.Name,
+                plan?.Plan.Items.Count(item => item.IsPacked) ?? 0,
+                plan?.Plan.Items.Count ?? 0,
+                checklist.Count(item => item.IsPacked),
+                checklist.Count));
+            if (profile.Id == selectedProfileId)
+            {
+                selectedChecklist = checklist;
+            }
+        }
+
+        var selectedPlan = familyPlans.SingleOrDefault(plan => plan.Profile.Id == selectedProfileId);
+        var rules = selectedPlan is null ? null : BuildLuggageRules(trip, selectedPlan);
+        var (forecast, weatherFeedback) = await GetDashboardWeatherAsync(trip, cancellationToken);
+        var usage = await store.GetUsageAsync(user.Id, tripId, cancellationToken);
+        return Ok(new TripDashboard(profiles, selectedProfileId, selectedPlan, familyPlans, selectedChecklist, progress, rules, usage, forecast, weatherFeedback));
+    }
+
     [HttpGet("{tripId:guid}/weather")]
     public async Task<ActionResult<WeatherForecast>> GetWeatherAsync(Guid tripId, CancellationToken cancellationToken)
     {
@@ -188,8 +242,7 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
             return NotFoundProblem("Perfil o viaje no encontrado");
         }
 
-        var items = await store.GetChecklistAsync(user.Id, tripId, profileId, cancellationToken);
-        return Ok(items.Count == 0 ? await store.AddChecklistItemsAsync(user.Id, ChecklistDefaults.Create(tripId, profileId), cancellationToken) : items);
+        return Ok(await GetOrCreateProfileChecklistAsync(user.Id, tripId, profileId, cancellationToken));
     }
 
     [HttpPost("{tripId:guid}/checklist")]
@@ -229,6 +282,49 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
     private static TripResponse ToResponse(Trip trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, trip.Activities.Select(activity => (int)activity).ToArray(), trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (int)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, trip.DayPlansOrEmpty.Select(plan => new TripDayPlanContract(plan.Date, plan.Activities.Select(activity => (int)activity).ToArray())).ToArray(), trip.AirlineCode, trip.TransportTypesOrEmpty.Select(type => (int)type).ToArray(), trip.LuggagesOrDefault.Select(luggage => new TripLuggageContract(luggage.Id, (int)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray(), trip.Origin, ToTransportPlan(trip.TransportPlan));
     private static TransportPlanContract? ToTransportPlan(TransportPlan? plan) => plan is null ? null : new(plan.Summary, plan.Legs.Select(leg => new TransportLegContract((int)leg.Type, leg.From, leg.To, leg.EstimatedMinutes, leg.Description)).ToArray());
     private static TripLuggage[]? ToLuggages(IReadOnlyCollection<TripLuggageContract>? luggages) => luggages?.Select(luggage => new TripLuggage(luggage.Id == Guid.Empty ? Guid.NewGuid() : luggage.Id, (LuggageType)luggage.Type, luggage.AllowanceGrams, luggage.HeightCentimetres, luggage.WidthCentimetres, luggage.DepthCentimetres, luggage.Name)).ToArray();
+    private async Task<IReadOnlyList<ChecklistItem>> GetOrCreateProfileChecklistAsync(Guid userId, Guid tripId, Guid profileId, CancellationToken cancellationToken)
+    {
+        var items = await store.GetChecklistAsync(userId, tripId, profileId, cancellationToken);
+        return items.Count == 0
+            ? await store.AddChecklistItemsAsync(userId, ChecklistDefaults.Create(tripId, profileId), cancellationToken)
+            : items;
+    }
+
+    private async Task<(TripWeatherForecast? Forecast, string? Feedback)> GetDashboardWeatherAsync(Trip trip, CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (trip.EndDate < today)
+        {
+            return (null, "La previsión no está disponible para viajes ya finalizados.");
+        }
+
+        if (trip.StartDate > today.AddDays(15))
+        {
+            return (null, $"La previsión detallada estará disponible a partir del {trip.StartDate.AddDays(-15).ToString("d", System.Globalization.CultureInfo.CurrentCulture)}.");
+        }
+
+        var forecast = await weather.GetAsync(trip.Destination, trip.StartDate, trip.EndDate, cancellationToken);
+        return forecast is null
+            ? (null, "No se ha podido obtener la previsión para este destino en este momento.")
+            : (new TripWeatherForecast(
+                forecast.Destination,
+                forecast.MinimumCelsius,
+                forecast.MaximumCelsius,
+                forecast.RainProbability,
+                forecast.StartDate,
+                forecast.EndDate,
+                forecast.Daily.Select(day => new DailyTripForecast(day.Date, day.MinimumCelsius, day.MaximumCelsius, day.RainProbability, day.WeatherCode, day.ApparentMinimumCelsius, day.ApparentMaximumCelsius, day.WindSpeedKilometresPerHour)).ToArray()), null);
+    }
+
+    private static LuggageRulesSummary BuildLuggageRules(Trip trip, ProfileTripPackingPlan profilePlan)
+    {
+        var weight = profilePlan.Plan.TotalWeightGrams;
+        var remaining = trip.LuggageAllowanceGrams - weight;
+        var plannedVolume = profilePlan.Plan.Items.Sum(item => EstimatedVolumeMillilitres(item.Recommendation.Item.Type));
+        var capacityVolume = trip.LuggageHeightCentimetres * trip.LuggageWidthCentimetres * trip.LuggageDepthCentimetres * 1000;
+        return new LuggageRulesSummary(trip.LuggageAllowanceGrams, weight, remaining, trip.CabinOnly, remaining >= 0, 100, 1000, plannedVolume, capacityVolume);
+    }
+
     private static int EstimatedVolumeMillilitres(ClothingType type) => type switch
     {
         ClothingType.Jacket => 7000,

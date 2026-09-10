@@ -8,24 +8,42 @@ else if (IsActive && !string.IsNullOrWhiteSpace(Feedback))
 }
 else if (IsActive && Plan is null)
 {
-    <section class="family-section"><h2>Maleta</h2><p class="muted">Selecciona un viaje y un viajero para preparar la maleta.</p></section>
+    <section class="packing-empty-state"><span aria-hidden="true">🧳</span><div><p class="type">Tu maleta está esperando</p><h2>Selecciona un viaje y un viajero</h2><p>Selecciona un viaje y un viajero para preparar la maleta.</p><p class="muted">Cuando elijas a quién viaja, reuniremos prendas, checklist y reglas de equipaje en un único lugar.</p></div></section>
 }
 else if (IsActive && Plan is not null)
 {
     <section class="hero"><div><p>@Plan.Plan.Trip.Destination · @Plan.Plan.Trip.Days días</p><h2>Maleta de @Plan.Profile.Name</h2></div></section>
     <section class="traveller-select"><label>Maleta de <select disabled="@IsBusy" value="@SelectedProfileId" @onchange="SelectProfile">@foreach (var profile in TripProfiles) { <option value="@profile.Id">@profile.Name</option> }</select></label></section>
     <PreparationProgressPanel Items="PreparationProgress" /><LuggageRulesPanel Rules="LuggageRules" /><PackingInsightsPanel Insights="Insights" />
+    @if (PriorityTasks.Count > 0)
+    {
+        <section class="preparation-priorities"><header><div><p class="type">Siguiente paso</p><h2>Las 3 tareas más importantes</h2><p class="muted">Completa estas acciones para dejar la maleta lista antes.</p></div><span aria-hidden="true">✦</span></header><ol>@foreach (var task in PriorityTasks) { <li><span aria-hidden="true">@task.Icon</span><div><small>@task.Label</small><strong>@task.Description</strong></div></li> }</ol></section>
+    }
     <PreparationTimeline Plan="Plan.Plan" Checklist="Checklist" />
     @if (Plan.Plan.MissingItems is { Count: > 0 } missingItems)
     {
-        <section class="family-section"><h2>Faltantes para este viaje</h2><p class="muted">Revísalos antes de cerrar la maleta.</p><div class="cards">@foreach (var missing in missingItems.Where(item => !dismissedMissing.Contains(item.Type))) { <article class="card"><div><p class="type">@missing.Type</p><p>@missing.Description</p></div><div><button class="secondary" @onclick="() => MarkMissing(missing.Type)">Lo compraré</button><button class="secondary" @onclick="() => MarkMissing(missing.Type)">No lo necesito</button></div></article> }</div></section>
+        <section class="family-section missing-items-section"><header class="missing-items-heading"><div><p class="type">Antes de salir</p><h2>Faltantes para este viaje</h2><p class="muted">Revísalos antes de cerrar la maleta.</p></div><span>@missingItems.Count pendiente@(missingItems.Count == 1 ? string.Empty : "s")</span></header><div class="missing-items-grid">@foreach (var missing in missingItems.Where(item => !dismissedMissing.Contains(item.Type))) { <article class="missing-item-card"><span class="missing-item-icon" aria-hidden="true">@MissingIcon(missing.Type)</span><div><p class="type">@missing.Type</p><h3>@missing.Description</h3></div><div class="missing-item-actions"><button class="secondary" disabled="@IsBusy" @onclick="() => MarkMissing(missing.Type)">Lo compraré</button><button class="secondary" disabled="@IsBusy" @onclick="() => MarkMissing(missing.Type)">No lo necesito</button></div></article> }</div></section>
     }
     @if (Plan.Plan.Outfits is { Count: > 0 } outfits)
     {
-        <section class="family-section"><h2>Outfits por día</h2><div class="cards">@foreach (var outfit in outfits) { <article class="card"><div><p class="type">@outfit.Date.ToString("dddd d") · @outfit.Activity</p><h3>@string.Join(" + ", outfit.Items.Select(item => item.Name))</h3><p class="reason">@outfit.Explanation</p></div></article> }</div></section>
+        <section class="family-section outfits-section">
+            <header class="outfits-heading">
+                <div><p class="type">Looks recomendados</p><h2>Outfits por día</h2><p class="muted">Combinaciones pensadas para aprovechar mejor las prendas que ya llevas.</p></div>
+                <span>@outfits.Count look@(outfits.Count == 1 ? string.Empty : "s")</span>
+            </header>
+            <div class="outfit-grid">
+                @foreach (var outfit in outfits)
+                {
+                    <article class="outfit-card">
+                        <time datetime="@outfit.Date.ToString("yyyy-MM-dd")"><span>@outfit.Date.ToString("ddd")</span><strong>@outfit.Date.Day</strong></time>
+                        <div class="outfit-content"><p class="type">@outfit.Activity</p><h3>Look recomendado</h3><div class="outfit-items" aria-label="Prendas del outfit">@foreach (var item in outfit.Items) { <span>@item.Name</span> }</div><p class="reason">@outfit.Explanation</p></div>
+                    </article>
+                }
+            </div>
+        </section>
     }
     <ToiletryBagPanel Items="Checklist" IsBusy="IsBusy" PackedChanged="ChecklistPackedChanged" Added="ToiletryAdded" />
-    <section><div class="section-heading"><h2>Preparar la maleta</h2></div><div class="cards">@foreach (var planned in Plan.Plan.Items) { <article class="card"><label><input disabled="@IsBusy" type="checkbox" checked="@planned.IsPacked" @onchange="args => PackedChanged.InvokeAsync((planned, args.Value is bool packed && packed))" /></label><div><p class="type">@planned.Recommendation.Item.Type · @planned.Recommendation.Score puntos</p><h3>@planned.Recommendation.Item.Name</h3><p class="reason">@(planned.Recommendation.Reasons.Count == 0 ? "Prenda añadida manualmente a esta maleta." : string.Join(" · ", planned.Recommendation.Reasons))</p></div></article> }</div></section>
+    <section><div class="section-heading"><h2>Preparar la maleta</h2></div><div class="cards">@foreach (var planned in Plan.Plan.Items) { <article class="card"><label><input disabled="@IsBusy" type="checkbox" checked="@planned.IsPacked" @onchange="args => PackedChanged.InvokeAsync(new SetPackingItemStatusCommand(planned.Recommendation.Item.Id, args.Value is bool packed && packed))" /></label><div><p class="type">@planned.Recommendation.Item.Type · @planned.Recommendation.Score puntos</p><h3>@planned.Recommendation.Item.Name</h3><p class="reason">@(planned.Recommendation.Reasons.Count == 0 ? "Prenda añadida manualmente a esta maleta." : string.Join(" · ", planned.Recommendation.Reasons))</p></div></article> }</div></section>
     <section class="family-section"><h2>Añadir prenda manualmente</h2><div class="quick-form"><label>Prenda <select disabled="@IsBusy" @bind="manualClothingItemId"><option value="@Guid.Empty">Selecciona una prenda</option>@foreach (var item in AvailableManualClothing) { <option value="@item.Id">@item.Name · @(item.WeightGrams ?? 0) g</option> }</select></label><button disabled="@IsBusy" @onclick="AddManualClothing">Añadir a la maleta</button></div></section>
     <PackingChecklist Items="Checklist" OnPackedChanged="ChecklistPackedChanged" />
 }

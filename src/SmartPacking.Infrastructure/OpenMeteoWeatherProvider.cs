@@ -75,7 +75,8 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
 
         try
         {
-            var location = await httpClient.GetFromJsonAsync<GeocodingResponse>($"https://geocoding-api.open-meteo.com/v1/search?name={Uri.EscapeDataString(destination)}&count=1", cancellationToken);
+            var city = destination.Split(',', 2)[0].Trim();
+            var location = await httpClient.GetFromJsonAsync<GeocodingResponse>($"https://geocoding-api.open-meteo.com/v1/search?name={Uri.EscapeDataString(city)}&count=1", cancellationToken);
             var match = location?.Results?.FirstOrDefault();
             if (match is null)
             {

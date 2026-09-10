@@ -253,6 +253,30 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         .Select(ToDomain)
         .ToArray();
 
+    public async Task<WardrobeSnapshot> GetWardrobeCollectionAsync(Guid userId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var skip = (page - 1) * pageSize;
+        var activeItems = dbContext.ClothingItems
+            .AsNoTracking()
+            .Where(item => item.UserId == userId && !item.IsDeleted)
+            .OrderBy(item => item.Name)
+            .Skip(skip)
+            .Take(pageSize);
+        var deletedItems = dbContext.ClothingItems
+            .AsNoTracking()
+            .Where(item => item.UserId == userId && item.IsDeleted)
+            .OrderBy(item => item.Name)
+            .Skip(skip)
+            .Take(pageSize);
+        var items = await activeItems.Concat(deletedItems).ToListAsync(cancellationToken);
+
+        return new WardrobeSnapshot(
+            items.Where(item => !item.IsDeleted).Select(ToDomain).ToArray(),
+            items.Where(item => item.IsDeleted).Select(ToDomain).ToArray(),
+            page,
+            pageSize);
+    }
+
     public async Task<ClothingItem> AddClothingItemAsync(Guid userId, ClothingItem item, CancellationToken cancellationToken)
     {
         var entity = ToEntity(userId, item with { Id = item.Id == Guid.Empty ? Guid.NewGuid() : item.Id });

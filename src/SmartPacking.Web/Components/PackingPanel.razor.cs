@@ -49,16 +49,16 @@ public partial class PackingPanel
     public EventCallback<Guid> SelectedProfileChanged { get; set; }
 
     [Parameter]
-    public EventCallback<(PlannedItem Item, bool IsPacked)> PackedChanged { get; set; }
+    public EventCallback<SetPackingItemStatusCommand> PackedChanged { get; set; }
 
     [Parameter]
     public EventCallback<Guid> ManualClothingAdded { get; set; }
 
     [Parameter]
-    public EventCallback<(ChecklistItem Item, bool IsPacked)> ChecklistPackedChanged { get; set; }
+    public EventCallback<SetChecklistItemStatusCommand> ChecklistPackedChanged { get; set; }
 
     [Parameter]
-    public EventCallback<(string Name, ChecklistCategory Category)> ToiletryAdded { get; set; }
+    public EventCallback<AddChecklistItemCommand> ToiletryAdded { get; set; }
 
     private IEnumerable<ClothingItem> AvailableManualClothing => Plan is null
         ? []
@@ -81,4 +81,39 @@ public partial class PackingPanel
     }
 
     private void MarkMissing(ClothingType type) => dismissedMissing.Add(type);
+    private static string MissingIcon(ClothingType type) => type switch
+    {
+        ClothingType.Socks => "🧦",
+        ClothingType.Underwear => "🩲",
+        ClothingType.Shoes or ClothingType.Sandals => "👟",
+        ClothingType.Swimwear => "🩱",
+        ClothingType.Jacket or ClothingType.Coat => "🧥",
+        _ => "✦"
+    };
+
+    private IReadOnlyList<PreparationTask> PriorityTasks
+    {
+        get
+        {
+            if (Plan is null)
+            {
+                return [];
+            }
+
+            var tasks = new List<PreparationTask>();
+            foreach (var item in Plan.Plan.Items.Where(item => !item.IsPacked).Take(3))
+            {
+                tasks.Add(new("Prenda pendiente", $"Añade {item.Recommendation.Item.Name} a la maleta.", "👕"));
+            }
+
+            foreach (var item in Checklist.Where(item => !item.IsPacked).Take(3 - tasks.Count))
+            {
+                tasks.Add(new("Imprescindible", $"Revisa: {item.Name}.", "✓"));
+            }
+
+            return tasks;
+        }
+    }
+
+    private sealed record PreparationTask(string Label, string Description, string Icon);
 }

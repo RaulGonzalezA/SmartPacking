@@ -91,7 +91,7 @@ if (authenticationEnabled)
     app.MapGet("/login", async (HttpContext context, string? error) =>
     {
         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return Results.Redirect($"/login.html{(string.IsNullOrWhiteSpace(error) ? string.Empty : $"?error={Uri.EscapeDataString(error)}")}");
+        return Results.File(Path.Combine(app.Environment.WebRootPath, "login.html"), "text/html");
     });
     app.MapGet("/auth/login", () => Results.Challenge(new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/" }, [OpenIdConnectDefaults.AuthenticationScheme]));
     app.MapGet("/auth/register", () =>

@@ -4,6 +4,7 @@ namespace SmartPacking.Api.Contracts;
 
 #pragma warning disable S6964 // Request DTOs deliberately use non-nullable primitives; controller validation enforces ranges.
 public sealed record ClothingItemResponse(Guid Id, string Name, ClothingType Type, Season Season, string Color, int WarmthLevel, bool Waterproof, Style Style, int? WeightGrams, bool IsClean, bool IsAvailable, int PreferenceScore, IReadOnlyCollection<Guid> CombinesWith, bool IsDeleted, Guid? OwnerProfileId, string? PhotoUrl, string? Material = null);
+public sealed record WardrobeCollectionResponse(IReadOnlyList<ClothingItemResponse> Items, IReadOnlyList<ClothingItemResponse> DeletedItems, int Page, int PageSize);
 public sealed record UpsertClothingItemRequest(string Name, ClothingType Type, Season Season, string Color, int WarmthLevel, bool Waterproof, Style Style, int? WeightGrams, bool IsClean, bool IsAvailable, int PreferenceScore, IReadOnlyCollection<Guid>? CombinesWith, Guid? OwnerProfileId, string? Material = null);
 public sealed record UpdateClothingStatusRequest(bool IsClean, bool IsAvailable);
 

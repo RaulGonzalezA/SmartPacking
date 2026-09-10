@@ -166,6 +166,24 @@ public sealed class WardrobeApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WardrobeCollectionReturnsActiveAndRetiredItemsInOneResponse()
+    {
+        var activeRequest = new UpsertClothingItemRequest("Camisa activa", ClothingType.Shirt, Season.AllYear, "Blanco", 2, false, Style.Casual, 200, true, true, 70, [], null);
+        var retiredRequest = activeRequest with { Name = "Jersey retirado", Type = ClothingType.Sweater };
+        var active = (await (await client.PostAsJsonAsync("/api/wardrobe", activeRequest)).Content.ReadFromJsonAsync<ApiResult<ClothingItemResponse>>())!.Data;
+        var retired = (await (await client.PostAsJsonAsync("/api/wardrobe", retiredRequest)).Content.ReadFromJsonAsync<ApiResult<ClothingItemResponse>>())!.Data;
+        (await client.DeleteAsync($"/api/wardrobe/{retired.Id}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var collection = await client.GetFromJsonAsync<WardrobeCollectionResponse>("/api/wardrobe?includeDeleted=true");
+
+        collection.Should().NotBeNull();
+        collection!.Items.Should().Contain(item => item.Id == active.Id && !item.IsDeleted);
+        collection.DeletedItems.Should().Contain(item => item.Id == retired.Id && item.IsDeleted);
+        collection.Page.Should().Be(1);
+        collection.PageSize.Should().Be(100);
+    }
+
+    [Fact]
     public async Task DatabaseMigrationsProfilesAndPackingListsAreAvailablePerPerson()
     {
         (await client.GetAsync("/api/me")).EnsureSuccessStatusCode();
@@ -202,6 +220,41 @@ public sealed class WardrobeApiTests : IAsyncLifetime
         checklist.Should().NotBeNull();
         checklist.Should().Contain(item => item.Category == ChecklistCategory.Toiletries && item.Name.Contains("pasta", StringComparison.OrdinalIgnoreCase));
         checklist.Should().OnlyContain(item => item.ProfileId == profileId);
+    }
+
+    [Fact]
+    public async Task TripDashboardAggregatesTheSelectedTripDataInOneResponse()
+    {
+        var tripResponse = await client.PostAsJsonAsync("/api/trips", new
+        {
+            destination = "Sevilla",
+            startDate = new DateOnly(2026, 10, 10),
+            endDate = new DateOnly(2026, 10, 13),
+            minimumTemperatureCelsius = 16,
+            maximumTemperatureCelsius = 26,
+            activities = new[] { Style.Casual }
+        });
+        tripResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var tripId = (await tripResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var profileResponse = await client.PostAsJsonAsync("/api/profiles", new { name = "Viajera" });
+        profileResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var profile = await profileResponse.Content.ReadFromJsonAsync<FamilyProfile>();
+        profile.Should().NotBeNull();
+        var assignResponse = await client.PutAsJsonAsync($"/api/trips/{tripId}/profiles", new { profileIds = new[] { profile!.Id } });
+        assignResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var response = await client.GetAsync($"/api/trips/{tripId}/dashboard?profileId={profile.Id}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var dashboard = await response.Content.ReadFromJsonAsync<TripDashboard>();
+        dashboard.Should().NotBeNull();
+        dashboard!.SelectedProfileId.Should().Be(profile.Id);
+        dashboard.Profiles.Should().ContainSingle(candidate => candidate.Id == profile.Id);
+        dashboard.SelectedPlan.Should().NotBeNull();
+        dashboard.FamilyPlans.Should().ContainSingle();
+        dashboard.SelectedChecklist.Should().NotBeEmpty();
+        dashboard.PreparationProgress.Should().ContainSingle();
+        dashboard.LuggageRules.Should().NotBeNull();
     }
 
     [Fact]

@@ -1,12 +1,16 @@
 using SmartPacking.Domain;
+using System.ComponentModel.DataAnnotations;
 
 namespace SmartPacking.Web.Components;
 
 public sealed class TripFormInput
 {
+    [Required(ErrorMessage = "Indica el destino del viaje.")]
     public string Destination { get; set; } = string.Empty;
     public string? Origin { get; set; }
+    [Required(ErrorMessage = "Indica la fecha de salida.")]
     public DateOnly StartDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+    [Required(ErrorMessage = "Indica la fecha de regreso.")]
     public DateOnly EndDate { get; set; } = DateOnly.FromDateTime(DateTime.Today.AddDays(3));
     public int MinimumTemperatureCelsius { get; set; } = 18;
     public int MaximumTemperatureCelsius { get; set; } = 28;

@@ -96,13 +96,21 @@ public partial class Home : ComponentBase, IDisposable
     {
         get
         {
+            if (!string.IsNullOrWhiteSpace(State.WeatherFeedback))
+            {
+                return State.WeatherFeedback;
+            }
+
             var trip = State.Trips.SingleOrDefault(candidate => candidate.Id == State.SelectedTripId);
-            if (trip is null || trip.StartDate <= DateOnly.FromDateTime(DateTime.Today).AddDays(16))
+            if (trip is null)
             {
                 return "No hay previsión disponible para estas fechas.";
             }
 
-            return $"Es muy pronto para una previsión fiable. Podrás consultar la previsión detallada a partir del {trip.StartDate.AddDays(-15).ToString("d", CultureInfo.CurrentCulture)}.";
+            var firstForecastDate = DateOnly.FromDateTime(DateTime.Today).AddDays(15);
+            return trip.StartDate > firstForecastDate
+                ? $"Es muy pronto para una previsión fiable. Podrás consultar la previsión detallada a partir del {trip.StartDate.AddDays(-15).ToString("d", CultureInfo.CurrentCulture)}."
+                : "No se ha podido obtener la previsión para este destino en este momento.";
         }
     }
 
@@ -118,6 +126,11 @@ public partial class Home : ComponentBase, IDisposable
     private Task LoadInitialAsync() => DataCoordinator.LoadInitialAsync(State, LoadCancellationToken);
     private Task RefreshTripsAsync() => DataCoordinator.RefreshTripsAsync(State, LoadCancellationToken);
     private Task RefreshTripDetailsAsync() => DataCoordinator.RefreshTripDetailsAsync(State, LoadCancellationToken);
+    private Task RefreshWeatherAsync()
+    {
+        BeginLoad();
+        return RunAsync(() => DataCoordinator.RefreshWeatherAsync(State, LoadCancellationToken), true);
+    }
     private Task RefreshPackingAsync() => DataCoordinator.RefreshPackingAsync(State, LoadCancellationToken);
     private Task RefreshWardrobeAsync() => DataCoordinator.RefreshWardrobeAsync(State, LoadCancellationToken);
     private async Task RefreshAiUsageAsync() => aiUsage = await DataCoordinator.RefreshAiUsageAsync(LoadCancellationToken);
@@ -144,6 +157,7 @@ public partial class Home : ComponentBase, IDisposable
         BeginLoad();
         State.SelectTrip(id);
         State.Weather = null;
+        State.WeatherFeedback = null;
         State.Plan = null;
         State.LuggageRules = null;
         State.Checklist = [];
@@ -161,16 +175,23 @@ public partial class Home : ComponentBase, IDisposable
     {
         if (isLoadOperation) State.IsLoading = true; else State.IsSubmitting = true;
         await InvokeAsync(StateHasChanged);
-        try { await operation(); }
-        catch (OperationCanceledException) { /* Superseded load. */ }
-        catch (ApiProblemException exception) when (exception.StatusCode == StatusCodes.Status401Unauthorized)
+        try
         {
-            Navigation.NavigateTo("/login?error=session_expired", forceLoad: true);
+            var result = await ApiOperationResult.ExecuteAsync(operation);
+            if (result.IsSuccess)
+            {
+                return;
+            }
+
+            if (result.Status == ApiOperationStatus.Unauthorized)
+            {
+                Navigation.NavigateTo("/login?error=session_expired", forceLoad: true);
+                return;
+            }
+
+            State.Feedback = result.Message;
         }
-        catch (ApiProblemException exception) when (exception.StatusCode == StatusCodes.Status403Forbidden) { State.Feedback = "No tienes permisos para realizar esta acción."; }
-        catch (ApiProblemException exception) { State.Feedback = exception.Message; }
-        catch (HttpRequestException) { State.Feedback = "No se ha podido conectar con el servicio. Inténtalo de nuevo."; }
-        catch (Exception) { State.Feedback = "Ha ocurrido un error inesperado. Inténtalo de nuevo."; }
+        catch (OperationCanceledException) { /* Superseded load. */ }
         finally { if (isLoadOperation) State.IsLoading = false; else State.IsSubmitting = false; }
     }
 
@@ -186,22 +207,17 @@ public partial class Home : ComponentBase, IDisposable
             State.Feedback = "Perfil actualizado.";
             return new Dictionary<string, string[]>();
         }
-        catch (ApiProblemException exception) when (exception.StatusCode == StatusCodes.Status401Unauthorized)
+        catch (Exception exception)
         {
-            Navigation.NavigateTo("/login?error=session_expired", forceLoad: true);
-            return new Dictionary<string, string[]> { ["form"] = ["Tu sesión ha caducado. Inicia sesión de nuevo."] };
-        }
-        catch (ApiProblemException exception) when (exception.Errors.Count > 0)
-        {
-            return exception.Errors;
-        }
-        catch (ApiProblemException exception)
-        {
-            return new Dictionary<string, string[]> { ["form"] = [exception.Message] };
-        }
-        catch (HttpRequestException)
-        {
-            return new Dictionary<string, string[]> { ["form"] = ["No se ha podido conectar con el servicio. Inténtalo de nuevo."] };
+            var result = ApiOperationResult.FromException(exception);
+            if (result.Status == ApiOperationStatus.Unauthorized)
+            {
+                Navigation.NavigateTo("/login?error=session_expired", forceLoad: true);
+            }
+
+            return result.Errors.Count > 0
+                ? result.Errors
+                : new Dictionary<string, string[]> { ["form"] = [result.Message ?? "No se pudo actualizar el perfil."] };
         }
         finally
         {
@@ -230,18 +246,19 @@ public partial class Home : ComponentBase, IDisposable
     private Task SaveTravellersAsync(IReadOnlyCollection<Guid> ids) => RunAsync(async () => { await Api.SetTripProfilesAsync(State.SelectedTripId, ids, CancellationToken.None); await RefreshTripDetailsAsync(); State.Feedback = "Viajeros guardados."; });
     private Task SaveTravellerAsync(FamilyProfile profile) => RunAsync(async () => { await Api.UpdateProfileAsync(profile.Id, profile.Name, profile.PackingNotes, profile.MedicalNotes, CancellationToken.None); await RefreshTripsAsync(); await RefreshTripDetailsAsync(); State.Feedback = "Viajero actualizado."; });
     private Task ArchiveTravellerAsync(Guid id) => RunAsync(async () => { await Api.ArchiveProfileAsync(id, CancellationToken.None); await RefreshTripsAsync(); await RefreshTripDetailsAsync(); State.Feedback = "Viajero archivado. Sus maletas anteriores se conservan."; });
-    private Task CreateClothingAsync(string name, string color, Guid ownerId, ClothingType type, Season season, Style style, string? material, int weightGrams, IBrowserFile? file) => RunAsync(async () =>
+    private Task CreateClothingAsync(CreateGarmentCommand command) => RunAsync(async () =>
     {
-        var item = await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), name, type, season, color, 2, false, style, weightGrams, true, true, 70, [], false, ownerId, null, material), CancellationToken.None);
-        if (file is not null)
+        var item = await Api.CreateClothingAsync(new ClothingItem(Guid.NewGuid(), command.Name, command.Type, command.Season, command.Color, 2, false, command.Style, command.WeightGrams, true, true, 70, [], false, command.OwnerId, null, command.Material), CancellationToken.None);
+        if (command.Photo is not null)
         {
-            await UploadClothingPhotoAsync(item.Id, file);
+            await UploadClothingPhotoCoreAsync(item.Id, command.Photo);
         }
 
         State.Feedback = "Prenda guardada.";
         await RefreshWardrobeAsync();
     });
-    private async Task UploadClothingPhotoAsync(Guid id, IBrowserFile file) { await using var content = file.OpenReadStream(5 * 1024 * 1024); var url = await Api.UploadClothingPhotoAsync(id, content, file.ContentType, file.Name, CancellationToken.None); wardrobePanel?.SetPhotoUrl(id, url); State.Feedback = "Foto de la prenda actualizada."; }
+    private Task UploadClothingPhotoAsync(UploadGarmentPhotoCommand command) => RunAsync(() => UploadClothingPhotoCoreAsync(command.GarmentId, command.Photo));
+    private async Task UploadClothingPhotoCoreAsync(Guid id, IBrowserFile file) { await using var content = file.OpenReadStream(5 * 1024 * 1024); var url = await Api.UploadClothingPhotoAsync(id, content, file.ContentType, file.Name, CancellationToken.None); wardrobePanel?.SetPhotoUrl(id, url); State.Feedback = "Foto de la prenda actualizada."; }
     private async Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(IBrowserFile file)
     {
         await using var content = file.OpenReadStream(5 * 1024 * 1024);
@@ -249,13 +266,13 @@ public partial class Home : ComponentBase, IDisposable
         aiUsage = await DataCoordinator.RefreshAiUsageAsync(lifetimeCancellation.Token);
         return suggestion;
     }
-    private async Task UpdateStatusAsync(ClothingItem item, bool clean, bool available) { await Api.UpdateClothingStatusAsync(item.Id, clean, available, CancellationToken.None); await RefreshWardrobeAsync(); }
+    private Task UpdateStatusAsync(UpdateGarmentStatusCommand command) => RunAsync(async () => { await Api.UpdateClothingStatusAsync(command.GarmentId, command.IsClean, command.IsAvailable, CancellationToken.None); await RefreshWardrobeAsync(); });
     private async Task DeleteClothingAsync(Guid id) { await Api.DeleteClothingAsync(id, CancellationToken.None); await RefreshWardrobeAsync(); }
     private async Task RestoreClothingAsync(Guid id) { await Api.RestoreClothingAsync(id, CancellationToken.None); await RefreshWardrobeAsync(); }
-    private Task SetPackedAsync((PlannedItem Item, bool IsPacked) input) => RunAsync(async () => { if (State.Plan is not null) { await Api.SetProfilePackedAsync(State.Plan.Plan.PackingListId, input.Item.Recommendation.Item.Id, input.IsPacked, CancellationToken.None); await RefreshPackingAsync(); } });
+    private Task SetPackedAsync(SetPackingItemStatusCommand command) => RunAsync(async () => { if (State.Plan is not null) { await Api.SetProfilePackedAsync(State.Plan.Plan.PackingListId, command.GarmentId, command.IsPacked, CancellationToken.None); await RefreshPackingAsync(); } });
     private Task AddManualClothingAsync(Guid id) => RunAsync(async () => { if (State.Plan is null) { State.Feedback = "Selecciona una prenda para añadirla."; return; } await Api.AddProfilePackingListItemAsync(State.Plan.Plan.PackingListId, id, CancellationToken.None); await RefreshPackingAsync(); });
-    private Task AddToiletryAsync((string Name, ChecklistCategory Category) input) => RunAsync(async () => { if (State.SelectedTripId == Guid.Empty || State.SelectedProfileId == Guid.Empty || string.IsNullOrWhiteSpace(input.Name)) { return; } await Api.AddProfileChecklistItemAsync(State.SelectedTripId, State.SelectedProfileId, input.Category, input.Name.Trim(), CancellationToken.None); await RefreshPackingAsync(); });
-    private Task SetChecklistPackedAsync((ChecklistItem Item, bool IsPacked) input) => RunAsync(async () => { await Api.SetChecklistPackedAsync(input.Item.Id, input.IsPacked, CancellationToken.None); await RefreshTripDetailsAsync(); });
+    private Task AddToiletryAsync(AddChecklistItemCommand command) => RunAsync(async () => { if (State.SelectedTripId == Guid.Empty || State.SelectedProfileId == Guid.Empty || string.IsNullOrWhiteSpace(command.Name)) { return; } await Api.AddProfileChecklistItemAsync(State.SelectedTripId, State.SelectedProfileId, command.Category, command.Name.Trim(), CancellationToken.None); await RefreshPackingAsync(); });
+    private Task SetChecklistPackedAsync(SetChecklistItemStatusCommand command) => RunAsync(async () => { await Api.SetChecklistPackedAsync(command.ChecklistItemId, command.IsPacked, CancellationToken.None); await RefreshTripDetailsAsync(); });
     private Task SaveUsageAsync(IReadOnlyCollection<Guid> usedIds) => RunAsync(async () => { await Api.SaveUsageAsync(State.SelectedTripId, State.UsageItemIds.Select(id => new ClothingUsage(State.SelectedTripId, id, usedIds.Contains(id))).ToArray(), CancellationToken.None); State.Feedback = "Uso real guardado."; });
     public void Dispose() { loadCancellation?.Cancel(); loadCancellation?.Dispose(); lifetimeCancellation.Cancel(); lifetimeCancellation.Dispose(); }
 }

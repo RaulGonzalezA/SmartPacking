@@ -47,12 +47,9 @@ public sealed class HomeDataCoordinator(IWebSmartPackingClient api, ILogger<Home
         state.WardrobeStatus.Begin();
         try
         {
-            var wardrobe = api.GetWardrobeAsync(false, cancellationToken);
-            var deletedWardrobe = api.GetWardrobeAsync(true, cancellationToken);
-            await Task.WhenAll(wardrobe, deletedWardrobe);
-
-            state.Wardrobe = await wardrobe;
-            state.DeletedWardrobe = await deletedWardrobe;
+            var wardrobe = await api.GetWardrobeCollectionAsync(cancellationToken);
+            state.Wardrobe = wardrobe.Items;
+            state.DeletedWardrobe = wardrobe.DeletedItems;
             RefreshPackingInsights(state);
             state.WardrobeStatus.Complete();
         }
@@ -75,25 +72,27 @@ public sealed class HomeDataCoordinator(IWebSmartPackingClient api, ILogger<Home
         state.PackingStatus.Begin();
         try
         {
-            state.TripProfiles = await api.GetTripProfilesAsync(state.SelectedTripId, cancellationToken);
-            state.EnsureSelectedProfile();
-            await LoadPackingCoreAsync(state, cancellationToken);
-            state.Weather = await api.GetWeatherAsync(state.SelectedTripId, cancellationToken);
-
-            var usage = await api.GetUsageAsync(state.SelectedTripId, cancellationToken);
-            state.UsageItemIds = usage.Count == 0
-                ? state.Plan?.Plan.Items.Select(item => item.Recommendation.Item.Id).ToHashSet() ?? []
-                : usage.Select(item => item.ClothingItemId).ToHashSet();
-            state.UsedItemIds = usage.Where(item => item.WasUsed).Select(item => item.ClothingItemId).ToHashSet();
-
-            var details = await Task.WhenAll(state.TripProfiles.Select(async profile =>
+            var dashboard = await api.GetTripDashboardAsync(state.SelectedTripId, state.SelectedProfileId, cancellationToken);
+            if (dashboard is null)
             {
-                var plan = await api.GetProfilePackingListAsync(state.SelectedTripId, profile.Id, cancellationToken);
-                var checklist = await api.GetChecklistAsync(state.SelectedTripId, profile.Id, cancellationToken);
-                return (Plan: plan, Progress: new PreparationProgressItem(profile.Name, plan?.Plan.Items.Count(item => item.IsPacked) ?? 0, plan?.Plan.Items.Count ?? 0, checklist.Count(item => item.IsPacked), checklist.Count));
-            }));
-            state.FamilyPlans = details.Where(item => item.Plan is not null).Select(item => item.Plan!).ToArray();
-            state.PreparationProgress = details.Select(item => item.Progress).ToArray();
+                state.ClearSelectedTripData();
+                state.PackingStatus.Complete();
+                return;
+            }
+
+            state.TripProfiles = dashboard.Profiles;
+            state.SelectProfile(dashboard.SelectedProfileId);
+            state.Plan = dashboard.SelectedPlan;
+            state.FamilyPlans = dashboard.FamilyPlans;
+            state.Checklist = dashboard.SelectedChecklist;
+            state.PreparationProgress = dashboard.PreparationProgress;
+            state.LuggageRules = dashboard.LuggageRules;
+            state.Weather = dashboard.Weather;
+            state.WeatherFeedback = dashboard.WeatherFeedback;
+            state.UsageItemIds = dashboard.Usage.Count == 0
+                ? state.Plan?.Plan.Items.Select(item => item.Recommendation.Item.Id).ToHashSet() ?? []
+                : dashboard.Usage.Select(item => item.ClothingItemId).ToHashSet();
+            state.UsedItemIds = dashboard.Usage.Where(item => item.WasUsed).Select(item => item.ClothingItemId).ToHashSet();
             RefreshPackingInsights(state);
             state.PackingStatus.Complete();
         }
@@ -127,6 +126,27 @@ public sealed class HomeDataCoordinator(IWebSmartPackingClient api, ILogger<Home
 
     public Task<GarmentRecognitionUsageResult> RefreshAiUsageAsync(CancellationToken cancellationToken) =>
         api.GetAiUsageAsync(cancellationToken);
+
+    public async Task RefreshWeatherAsync(HomeViewModel state, CancellationToken cancellationToken)
+    {
+        state.Weather = null;
+        state.WeatherFeedback = null;
+        try
+        {
+            state.Weather = await api.GetWeatherAsync(state.SelectedTripId, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            var result = ApiOperationResult.FromException(exception);
+            if (result.Status is ApiOperationStatus.NotFound or ApiOperationStatus.ValidationError or ApiOperationStatus.TransientFailure)
+            {
+                state.WeatherFeedback = result.Message;
+                return;
+            }
+
+            throw;
+        }
+    }
 
     private void RefreshPackingInsights(HomeViewModel state)
     {

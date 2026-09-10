@@ -47,7 +47,7 @@
                     </div>
                 </div>
                 <aside class="trip-hero-aside">
-                    <div class="trip-weather-summary"><span aria-hidden="true">☀️</span><strong>@selectedTrip.MinimumTemperatureCelsius°–@selectedTrip.MaximumTemperatureCelsius°</strong><small>temperatura prevista</small></div>
+                    <div class="trip-weather-summary"><span aria-hidden="true">@(Weather is null ? "☁️" : "☀️")</span><strong>@(Weather is null ? "Pendiente" : $"{Weather.MinimumCelsius:0}°–{Weather.MaximumCelsius:0}°")</strong><small>@(Weather is null ? "previsión por confirmar" : "previsión actual")</small></div>
                     <div class="trip-days"><strong>@selectedTrip.Days</strong><span>días</span></div>
                     <details class="action-menu">
                         <summary aria-label="Más acciones del viaje">•••</summary>
@@ -119,11 +119,12 @@
             <div class="ui-modal-backdrop">
                 <section class="ui-modal" role="dialog" aria-modal="true">
                     <header><div><p class="type">Viajero</p><h2>@(editingTraveller is null ? "Añadir viajero" : "Editar viajero")</h2></div><button type="button" class="icon-button" @onclick="CancelTravellerDialog" aria-label="Cerrar">×</button></header>
-                    <EditForm Model="editingTraveller" OnValidSubmit="SaveTravellerDialog" class="modal-form">
-                        <label>Nombre <InputText @bind-Value="CurrentTravellerName" /></label>
-                        <label>Notas de equipaje <InputText @bind-Value="CurrentTravellerPackingNotes" /></label>
-                        <label>Salud y medicación <InputText @bind-Value="CurrentTravellerMedicalNotes" /></label>
-                        <footer><button type="button" class="secondary" @onclick="CancelTravellerDialog">Cancelar</button><button disabled="@IsBusy">Guardar viajero</button></footer>
+                    <EditForm Model="travellerInput" OnValidSubmit="SaveTravellerDialog" OnInvalidSubmit="CaptureTravellerValidationErrors" class="modal-form structured-form">
+                        <DataAnnotationsValidator />
+                        <p class="form-intro">Guarda los datos que harán que las recomendaciones y la maleta de esta persona sean más útiles.</p>
+                        <fieldset><legend>Identidad</legend><label>Nombre <InputText @bind-Value="travellerInput.Name" /><ValidationMessage Field="Name" Errors="travellerFieldErrors" /></label></fieldset>
+                        <fieldset><legend>Preferencias para el viaje</legend><label>Notas de equipaje <InputText @bind-Value="travellerInput.PackingNotes" placeholder="Por ejemplo, viaja solo con equipaje de cabina" /><ValidationMessage Field="PackingNotes" Errors="travellerFieldErrors" /></label><label>Salud y medicación <InputText @bind-Value="travellerInput.MedicalNotes" placeholder="Información útil para preparar la bolsa de aseo" /><ValidationMessage Field="MedicalNotes" Errors="travellerFieldErrors" /></label></fieldset>
+                        <footer class="form-actions-sticky"><button type="button" class="secondary" disabled="@IsBusy" @onclick="CancelTravellerDialog">Cancelar</button><button disabled="@IsBusy">@(IsBusy ? "Guardando viajero…" : "Guardar viajero")</button></footer>
                     </EditForm>
                 </section>
             </div>
@@ -143,9 +144,9 @@
                 <button type="button" disabled="@IsBusy" @onclick="SaveUsage">Guardar uso real</button>
             </section>
         }
-        else if (SelectedTripId != Guid.Empty)
+        else if (Weather is null && SelectedTripId != Guid.Empty)
         {
-            <p class="muted">@WeatherUnavailableMessage</p>
+            <section class="weather-unavailable-state" role="status"><span aria-hidden="true">☁️</span><div><h2>La previsión aún no está disponible</h2><p>@WeatherUnavailableMessage</p><p class="muted">Puedes seguir preparando el viaje mientras tanto.</p>@if (WeatherRefreshRequested.HasDelegate) { <button type="button" class="secondary" disabled="@IsBusy" @onclick="() => WeatherRefreshRequested.InvokeAsync()">@(IsLoading ? "Actualizando previsión…" : "Reintentar previsión")</button> }</div></section>
         }
     </section>
 }

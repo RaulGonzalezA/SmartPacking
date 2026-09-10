@@ -21,7 +21,8 @@ public interface IWebSmartPackingClient
     Task UpdateProfileAsync(Guid profileId, string name, string? packingNotes, string? medicalNotes, CancellationToken cancellationToken);
     Task ArchiveProfileAsync(Guid profileId, CancellationToken cancellationToken);
     Task<IReadOnlyList<FamilyProfile>> GetTripProfilesAsync(Guid tripId, CancellationToken cancellationToken);
-    Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(bool deleted, CancellationToken cancellationToken);
+    Task<TripDashboard?> GetTripDashboardAsync(Guid tripId, Guid selectedProfileId, CancellationToken cancellationToken);
+    Task<WardrobeSnapshot> GetWardrobeCollectionAsync(CancellationToken cancellationToken);
     Task<ProfileTripPackingPlan?> GetProfilePackingListAsync(Guid tripId, Guid profileId, CancellationToken cancellationToken);
     Task<IReadOnlyList<TripTemplate>> GetTripTemplatesAsync(CancellationToken cancellationToken);
     Task<TripWeatherForecast?> GetWeatherAsync(Guid tripId, CancellationToken cancellationToken);

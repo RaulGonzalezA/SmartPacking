@@ -11,9 +11,10 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
 {
     [HttpGet]
     [ProducesResponseType(typeof(ApiResult<IReadOnlyList<ClothingItemResponse>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(WardrobeCollectionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<ApiResult<IReadOnlyList<ClothingItemResponse>>>> GetAsync([FromQuery] int page = 1, [FromQuery] int pageSize = 100, CancellationToken cancellationToken = default)
+    public async Task<ActionResult> GetAsync([FromQuery] bool includeDeleted = false, [FromQuery] int page = 1, [FromQuery] int pageSize = 100, CancellationToken cancellationToken = default)
     {
         if (page < 1 || pageSize is < 1 or > 100)
         {
@@ -21,6 +22,16 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
+        if (includeDeleted)
+        {
+            var collection = await store.GetWardrobeCollectionAsync(user.Id, page, pageSize, cancellationToken);
+            return Ok(new WardrobeCollectionResponse(
+                collection.Items.Select(item => item.ToResponse()).ToArray(),
+                collection.DeletedItems.Select(item => item.ToResponse()).ToArray(),
+                collection.Page,
+                collection.PageSize));
+        }
+
         var items = (await store.GetWardrobePageAsync(user.Id, false, page, pageSize, cancellationToken)).Select(item => item.ToResponse()).ToArray();
         return Ok(new ApiResult<IReadOnlyList<ClothingItemResponse>>(items));
     }

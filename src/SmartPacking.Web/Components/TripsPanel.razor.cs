@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
+using System.ComponentModel.DataAnnotations;
 using SmartPacking.Application;
 using SmartPacking.Domain;
 
@@ -22,13 +24,9 @@ public partial class TripsPanel
     private Trip? editingTrip;
     private Guid synchronizedTripId;
     private IReadOnlySet<Guid>? synchronizedUsageItemIds;
-    private string newTravellerName = string.Empty;
-    private string newTravellerPackingNotes = string.Empty;
-    private string newTravellerMedicalNotes = string.Empty;
+    private readonly TravellerFormInput travellerInput = new();
+    private readonly Dictionary<string, string[]> travellerFieldErrors = new(StringComparer.Ordinal);
     private FamilyProfile? editingTraveller;
-    private string editingTravellerName = string.Empty;
-    private string editingTravellerPackingNotes = string.Empty;
-    private string editingTravellerMedicalNotes = string.Empty;
 
     [Parameter] public bool IsActive { get; set; }
     [Parameter] public bool IsBusy { get; set; }
@@ -46,6 +44,7 @@ public partial class TripsPanel
     [Parameter] public IReadOnlySet<Guid> UsedItemIds { get; set; } = new HashSet<Guid>();
     [Parameter] public bool IsCompleted { get; set; }
     [Parameter] public string WeatherUnavailableMessage { get; set; } = string.Empty;
+    [Parameter] public EventCallback WeatherRefreshRequested { get; set; }
     [Parameter] public EventCallback<Guid> SelectedTripChanged { get; set; }
     [Parameter] public EventCallback<TripFormInput> Created { get; set; }
     [Parameter] public EventCallback<Trip> Updated { get; set; }
@@ -112,13 +111,11 @@ public partial class TripsPanel
     }
     private void SetTraveller(Guid id, bool selected) { if (selected) tripProfileIds.Add(id); else tripProfileIds.Remove(id); }
     private Task SaveTravellers() => TravellersSaved.InvokeAsync(tripProfileIds);
-    private async Task AddTraveller() { if (!string.IsNullOrWhiteSpace(newTravellerName)) { await TravellerAdded.InvokeAsync(new(newTravellerName, newTravellerPackingNotes, newTravellerMedicalNotes)); newTravellerName = newTravellerPackingNotes = newTravellerMedicalNotes = string.Empty; } }
-    private string CurrentTravellerName { get => editingTraveller is null ? newTravellerName : editingTravellerName; set { if (editingTraveller is null) newTravellerName = value; else editingTravellerName = value; } }
-    private string CurrentTravellerPackingNotes { get => editingTraveller is null ? newTravellerPackingNotes : editingTravellerPackingNotes; set { if (editingTraveller is null) newTravellerPackingNotes = value; else editingTravellerPackingNotes = value; } }
-    private string CurrentTravellerMedicalNotes { get => editingTraveller is null ? newTravellerMedicalNotes : editingTravellerMedicalNotes; set { if (editingTraveller is null) newTravellerMedicalNotes = value; else editingTravellerMedicalNotes = value; } }
-    private void OpenTravellerForm() => showTravellerForm = true;
+    private async Task AddTraveller() { if (!string.IsNullOrWhiteSpace(travellerInput.Name)) { await TravellerAdded.InvokeAsync(new(travellerInput.Name, travellerInput.PackingNotes, travellerInput.MedicalNotes)); travellerInput.Clear(); } }
+    private void OpenTravellerForm() { travellerInput.Clear(); showTravellerForm = true; }
     private async Task SaveTravellerDialog()
     {
+        travellerFieldErrors.Clear();
         if (editingTraveller is null)
         {
             await AddTraveller();
@@ -128,17 +125,26 @@ public partial class TripsPanel
 
         await SaveTraveller();
     }
-    private void StartEditingTraveller(FamilyProfile profile) { editingTraveller = profile; editingTravellerName = profile.Name; editingTravellerPackingNotes = profile.PackingNotes ?? string.Empty; editingTravellerMedicalNotes = profile.MedicalNotes ?? string.Empty; }
-    private void CancelEditingTraveller() { editingTraveller = null; editingTravellerName = editingTravellerPackingNotes = editingTravellerMedicalNotes = string.Empty; }
+    private void StartEditingTraveller(FamilyProfile profile) { editingTraveller = profile; travellerInput.Name = profile.Name; travellerInput.PackingNotes = profile.PackingNotes ?? string.Empty; travellerInput.MedicalNotes = profile.MedicalNotes ?? string.Empty; }
+    private void CancelEditingTraveller() { editingTraveller = null; travellerInput.Clear(); }
     private void CancelTravellerDialog() { showTravellerForm = false; CancelEditingTraveller(); }
+    private void CaptureTravellerValidationErrors(EditContext context)
+    {
+        travellerFieldErrors.Clear();
+        foreach (var field in new[] { nameof(TravellerFormInput.Name), nameof(TravellerFormInput.PackingNotes), nameof(TravellerFormInput.MedicalNotes) })
+        {
+            var messages = context.GetValidationMessages(new FieldIdentifier(travellerInput, field)).ToArray();
+            if (messages.Length > 0) { travellerFieldErrors[field] = messages; }
+        }
+    }
     private async Task SaveTraveller()
     {
-        if (editingTraveller is null || string.IsNullOrWhiteSpace(editingTravellerName))
+        if (editingTraveller is null || string.IsNullOrWhiteSpace(travellerInput.Name))
         {
             return;
         }
 
-        await TravellerUpdated.InvokeAsync(editingTraveller with { Name = editingTravellerName.Trim(), PackingNotes = editingTravellerPackingNotes, MedicalNotes = editingTravellerMedicalNotes });
+        await TravellerUpdated.InvokeAsync(editingTraveller with { Name = travellerInput.Name.Trim(), PackingNotes = travellerInput.PackingNotes, MedicalNotes = travellerInput.MedicalNotes });
         CancelEditingTraveller();
     }
     private void SetUsage(Guid id, bool used) { if (used) usedItemIds.Add(id); else usedItemIds.Remove(id); }
@@ -152,4 +158,16 @@ public partial class TripsPanel
     private static string TransportSummary(Trip trip) => trip.TransportTypesOrEmpty.Count == 0 ? "🚗 Transporte por decidir" : string.Join(" · ", trip.TransportTypesOrEmpty.Select(type => type switch { TransportType.Car => "🚗 Coche", TransportType.Plane => "✈️ Avión", TransportType.Train => "🚆 Tren", TransportType.Bus => "🚌 Autobús", _ => "🛳️ Barco" }));
     private static string TransportIcon(TransportType type) => type switch { TransportType.Car => "🚗", TransportType.Plane => "✈️", TransportType.Train => "🚆", TransportType.Bus => "🚌", _ => "🛳️" };
     private static string ActivityName(TripActivity activity) => activity switch { TripActivity.Sightseeing => "Turismo", TripActivity.Beach => "Playa", TripActivity.Hiking => "Senderismo", TripActivity.Business => "Negocios", TripActivity.FormalEvent => "Evento formal", TripActivity.Sport => "Deporte", TripActivity.Nightlife => "Ocio nocturno", _ => "Relax" };
+
+    private sealed class TravellerFormInput
+    {
+        [Required(ErrorMessage = "Indica el nombre del viajero.")]
+        [StringLength(100, ErrorMessage = "El nombre no puede superar los 100 caracteres.")]
+        public string Name { get; set; } = string.Empty;
+        [StringLength(500, ErrorMessage = "Las notas de equipaje no pueden superar los 500 caracteres.")]
+        public string PackingNotes { get; set; } = string.Empty;
+        [StringLength(500, ErrorMessage = "Las notas de salud no pueden superar los 500 caracteres.")]
+        public string MedicalNotes { get; set; } = string.Empty;
+        public void Clear() { Name = string.Empty; PackingNotes = string.Empty; MedicalNotes = string.Empty; }
+    }
 }

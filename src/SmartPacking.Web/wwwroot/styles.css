@@ -69,7 +69,11 @@ select:focus,.entry-form input:focus,.quick-form input:focus,.quick-form select:
 .weather-day-title { display:flex; align-items:center; gap:10px; }
 .weather-temperatures { text-align:left; margin:15px 0 10px; }
 .weather-temperatures > strong { font-size:1.25rem; }
-.weather-temperatures > strong span { color:var(--muted); font-weight:400; }
+.weather-temperature-range { display:inline-flex !important; align-items:baseline; gap:.34rem; min-width:max-content; white-space:nowrap; }
+.weather-temperature-range > span { display:inline !important; margin:0 !important; }
+.weather-temperature-minimum { color:var(--navy) !important; }
+.weather-temperature-separator { color:var(--muted) !important; font-weight:400; }
+.weather-temperature-maximum { color:var(--navy) !important; }
 .weather-details { display:flex; justify-content:space-between; border-top:1px solid rgba(25,58,84,.1); padding-top:10px; color:var(--muted); font-size:.76rem; }
 .clothing-placeholder { width:44px; height:44px; display:grid; place-items:center; border-radius:50%; background:#fff1ed; font-size:1.35rem; }
 .photo-upload { font-size:.72rem !important; color:var(--muted); } .photo-upload input { max-width:125px; font-size:.68rem; }

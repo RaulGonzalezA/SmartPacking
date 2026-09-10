@@ -4,12 +4,11 @@
 @if (Plan is not null)
 {
     <section class="family-section preparation-timeline">
-        <h2>Calendario de preparación</h2>
-        <p class="muted">Organiza lo importante antes de salir.</p>
-        <div class="cards">
+        <header class="preparation-timeline-heading"><div><p class="type">Plan de salida</p><h2>Calendario de preparación</h2><p class="muted">Organiza lo importante antes de salir.</p></div><span aria-hidden="true">🗓️</span></header>
+        <div class="preparation-timeline-grid">
             @foreach (var task in Tasks())
             {
-                <article class="card"><div><p class="type">@task.Date.ToString("dddd d MMMM")</p><h3>@task.Title</h3><p class="reason">@task.Description</p></div></article>
+                <article class="preparation-task"><time datetime="@task.Date.ToString("yyyy-MM-dd")"><strong>@task.Date.ToString("dd")</strong><span>@task.Date.ToString("MMM")</span></time><div><p class="type">@task.Date.ToString("dddd")</p><h3>@task.Title</h3><p class="reason">@task.Description</p></div></article>
             }
         </div>
     </section>

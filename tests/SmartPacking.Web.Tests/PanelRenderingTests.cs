@@ -1,6 +1,8 @@
 using Bunit;
 using FluentAssertions;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Http;
+using SmartPacking.Application;
 using SmartPacking.Domain;
 using SmartPacking.Web.Components;
 using Xunit;
@@ -122,6 +124,104 @@ public sealed class PanelRenderingTests : BunitContext
             .Add(component => component.IsActive, true));
 
         cut.Markup.Should().Contain("Selecciona un viaje y un viajero para preparar la maleta.");
+        cut.Markup.Should().Contain("Tu maleta está esperando");
+    }
+
+    [Fact]
+    public void WardrobePanelWithoutItemsOffersTheFirstGarmentCallToAction()
+    {
+        var cut = Render<WardrobePanel>(parameters => parameters
+            .Add(component => component.IsActive, true));
+
+        cut.Markup.Should().Contain("Aún no has añadido prendas");
+        cut.FindAll("button").Should().Contain(button => button.TextContent.Contains("Añadir mi primera prenda", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GarmentRecognitionPreviewOnlyDisplaysAnErrorWhenItReceivesOne()
+    {
+        var withoutError = Render<GarmentRecognitionPreview>();
+        var withError = Render<GarmentRecognitionPreview>(parameters => parameters
+            .Add(component => component.Error, "No se pudo reconocer la prenda."));
+
+        withoutError.Markup.Should().BeEmpty();
+        withError.Markup.Should().Contain("No se pudo reconocer la prenda.");
+    }
+
+    [Fact]
+    public void ApiOperationResultClassifiesValidationFailuresWithTheirFieldErrors()
+    {
+        var result = ApiOperationResult.FromException(new ApiProblemException(
+            StatusCodes.Status400BadRequest,
+            "Datos no válidos",
+            null,
+            new Dictionary<string, string[]> { ["name"] = ["Indica un nombre."] }));
+
+        result.Status.Should().Be(ApiOperationStatus.ValidationError);
+        result.Errors.Should().ContainKey("name");
+    }
+
+    [Fact]
+    public async Task TripsPanelAllowsRetryingUnavailableWeather()
+    {
+        var retried = false;
+        var trip = new Trip(Guid.NewGuid(), "Roma", new DateOnly(2026, 9, 10), new DateOnly(2026, 9, 12), 12, 26, [Style.Casual]);
+        var cut = Render<TripsPanel>(parameters => parameters
+            .Add(component => component.IsActive, true)
+            .Add(component => component.Trips, new[] { trip })
+            .Add(component => component.SelectedTripId, trip.Id)
+            .Add(component => component.WeatherRefreshRequested, EventCallback.Factory.Create(this, () => retried = true)));
+
+        cut.Markup.Should().Contain("La previsión aún no está disponible");
+        await cut.FindAll("button").Single(button => button.TextContent.Contains("Reintentar previsión", StringComparison.Ordinal)).ClickAsync();
+
+        retried.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TripsPanelDoesNotShowTheUnavailableStateWhenForecastExists()
+    {
+        var trip = new Trip(Guid.NewGuid(), "Roma", new DateOnly(2026, 9, 10), new DateOnly(2026, 9, 12), 12, 26, [Style.Casual]);
+        var forecast = new TripWeatherForecast(
+            "Roma",
+            14,
+            25,
+            20,
+            trip.StartDate,
+            trip.EndDate,
+            [new DailyTripForecast(trip.StartDate, 14, 25, 20, 1)]);
+
+        var cut = Render<TripsPanel>(parameters => parameters
+            .Add(component => component.IsActive, true)
+            .Add(component => component.Trips, new[] { trip })
+            .Add(component => component.SelectedTripId, trip.Id)
+            .Add(component => component.Weather, forecast));
+
+        cut.Markup.Should().Contain("Previsión del viaje");
+        cut.Markup.Should().NotContain("La previsión aún no está disponible");
+    }
+
+    [Fact]
+    public void PackingPanelShowsTheThreeHighestPreparationPriorities()
+    {
+        var trip = new Trip(Guid.NewGuid(), "Roma", new DateOnly(2026, 9, 10), new DateOnly(2026, 9, 12), 12, 26, [Style.Casual]);
+        var profile = new FamilyProfile(Guid.NewGuid(), "Ana");
+        var checklist = new[]
+        {
+            new ChecklistItem(Guid.NewGuid(), trip.Id, ChecklistCategory.Documents, "Pasaporte", false, profile.Id),
+            new ChecklistItem(Guid.NewGuid(), trip.Id, ChecklistCategory.Toiletries, "Cepillo de dientes", false, profile.Id),
+            new ChecklistItem(Guid.NewGuid(), trip.Id, ChecklistCategory.Health, "Analgésico", false, profile.Id)
+        };
+        var plan = new ProfileTripPackingPlan(profile, new TripPackingPlan(trip, Guid.NewGuid(), [], 0));
+
+        var cut = Render<PackingPanel>(parameters => parameters
+            .Add(component => component.IsActive, true)
+            .Add(component => component.Plan, plan)
+            .Add(component => component.SelectedProfileId, profile.Id)
+            .Add(component => component.Checklist, checklist));
+
+        cut.Markup.Should().Contain("Las 3 tareas más importantes");
+        cut.FindAll(".preparation-priorities li").Should().HaveCount(3);
     }
 
     [Fact]

@@ -28,12 +28,12 @@ public sealed class ApiProblemDetailsHandler : DelegatingHandler
             : null;
         var exception = new ApiProblemException((int)response.StatusCode, problem?.Title ?? "No se pudo completar la operación.", problem?.Detail, errors);
         response.Dispose();
-         throw exception;
+        throw exception;
     }
 }
 
 public sealed class ApiProblemException(int statusCode, string title, string? detail, IReadOnlyDictionary<string, string[]>? errors = null) : Exception(detail is null ? title : $"{title}: {detail}")
-{ 
+{
     public int StatusCode { get; } = statusCode;
     public string Title { get; } = title;
     public string? Detail { get; } = detail;
