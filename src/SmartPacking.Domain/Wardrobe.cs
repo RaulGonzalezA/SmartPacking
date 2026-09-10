@@ -134,7 +134,8 @@ public sealed record UserProfile(Guid Id, string Name, bool IsOnboarded, string?
 public sealed record FamilyProfile(Guid Id, string Name, bool IsArchived = false, string? PackingNotes = null, string? MedicalNotes = null);
 
 public sealed record PackingList(Guid Id, Guid TripId, Guid UserId, DateTimeOffset CreatedAt, IReadOnlyCollection<PackingListItem> Items);
-public sealed record PackingListItem(Guid ClothingItemId, bool IsPacked);
+public enum RecommendationDecision { Current, Applied, Ignored }
+public sealed record PackingListItem(Guid ClothingItemId, bool IsPacked, bool IsManual = false, RecommendationDecision RecommendationDecision = RecommendationDecision.Current);
 public sealed record ProfilePackingList(Guid Id, Guid TripId, Guid ProfileId, Guid UserId, DateTimeOffset CreatedAt, IReadOnlyCollection<PackingListItem> Items);
 public enum ChecklistCategory { Documents, Toiletries, Technology, Health, Other }
 public sealed record ChecklistItem(Guid Id, Guid TripId, ChecklistCategory Category, string Name, bool IsPacked, Guid? ProfileId = null);
@@ -160,7 +161,9 @@ public sealed record Trip(
     IReadOnlyCollection<TransportType>? TransportTypes = null,
     IReadOnlyCollection<TripLuggage>? Luggages = null,
     string? Origin = null,
-    TransportPlan? TransportPlan = null)
+    TransportPlan? TransportPlan = null,
+    decimal? Latitude = null,
+    decimal? Longitude = null)
 {
     public int Days => EndDate.DayNumber - StartDate.DayNumber + 1;
     public TripStatus GetStatus(DateOnly today)

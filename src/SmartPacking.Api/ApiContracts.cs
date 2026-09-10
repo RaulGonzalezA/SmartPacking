@@ -1,3 +1,4 @@
+using SmartPacking.Application;
 using SmartPacking.Domain;
 
 namespace SmartPacking.Api;
@@ -9,6 +10,7 @@ public sealed record CreateChecklistItemRequest(ChecklistCategory Category, stri
 public sealed record CreateTripRequest(string Destination, DateOnly StartDate, DateOnly EndDate, int MinimumTemperatureCelsius, int MaximumTemperatureCelsius, IReadOnlyCollection<Style> Activities, string? TemplateKey = null, int? LuggageAllowanceGrams = null, bool? CabinOnly = null);
 public sealed record UpdateTripRequest(string Destination, DateOnly StartDate, DateOnly EndDate, int MinimumTemperatureCelsius, int MaximumTemperatureCelsius, IReadOnlyCollection<Style> Activities, string? TemplateKey, int LuggageAllowanceGrams, bool CabinOnly);
 public sealed record AddPackingListItemRequest(Guid ClothingItemId);
+public sealed record ResolveRecommendationChangeRequest(Guid ClothingItemId, RecommendationChangeKind ChangeKind);
 public sealed record CreateFamilyProfileRequest(string Name, string? PackingNotes = null, string? MedicalNotes = null);
 public sealed record UpdateFamilyProfileRequest(string Name, string? PackingNotes = null, string? MedicalNotes = null);
 public sealed record CompleteUserOnboardingRequest(string Name);

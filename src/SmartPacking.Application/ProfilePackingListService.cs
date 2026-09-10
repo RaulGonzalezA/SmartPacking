@@ -20,12 +20,21 @@ public sealed class ProfilePackingListService(ISmartPackingStore store)
         var packingList = await store.GetProfilePackingListAsync(userId, tripId, profileId, cancellationToken)
             ?? await store.SaveProfilePackingListAsync(new ProfilePackingList(Guid.NewGuid(), tripId, profileId, userId, DateTimeOffset.UtcNow,
                 recommendation.Items.Select(item => new PackingListItem(item.Item.Id, false)).ToArray()), cancellationToken);
+        var plan = BuildPlan(trip, packingList, wardrobe, recommendation, forecast);
+        return new ProfileTripPackingPlan(profile, plan);
+    }
+
+    internal static TripPackingPlan BuildPlan(Trip trip, ProfilePackingList packingList, IReadOnlyCollection<ClothingItem> wardrobe, PackingRecommendation recommendation, TripWeatherForecast? forecast)
+    {
         var wardrobeByItem = wardrobe.ToDictionary(item => item.Id);
         var recommendationByItem = recommendation.Items.ToDictionary(item => item.Item.Id);
-        var items = packingList.Items.Where(item => wardrobeByItem.ContainsKey(item.ClothingItemId)).Select(item => new PlannedItem(
-            recommendationByItem.GetValueOrDefault(item.ClothingItemId)
-                ?? new RecommendedItem(wardrobeByItem[item.ClothingItemId], 0, ["retirada del armario; se conserva por ser una maleta existente"]), item.IsPacked)).ToArray();
-        var plan = new TripPackingPlan(trip, packingList.Id, items, items.Sum(item => item.Recommendation.Item.WeightGrams ?? 0), recommendation.MissingItems, OutfitRecommendationService.Create(trip, items, forecast));
-        return new ProfileTripPackingPlan(profile, plan);
+        var items = packingList.Items
+            .Where(item => wardrobeByItem.ContainsKey(item.ClothingItemId) && (item.RecommendationDecision != RecommendationDecision.Ignored || item.IsManual))
+            .Select(item => new PlannedItem(
+                recommendationByItem.GetValueOrDefault(item.ClothingItemId)
+                    ?? new RecommendedItem(wardrobeByItem[item.ClothingItemId], 0, ["Se conserva por una elección anterior."]),
+                item.IsPacked))
+            .ToArray();
+        return new TripPackingPlan(trip, packingList.Id, items, items.Sum(item => item.Recommendation.Item.WeightGrams ?? 0), recommendation.MissingItems, OutfitRecommendationService.Create(trip, items, forecast));
     }
 }

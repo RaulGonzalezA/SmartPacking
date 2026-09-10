@@ -30,7 +30,9 @@ public static class TripMapper
             ? null
             : new TransportPlanContract(
                 trip.TransportPlan.Summary,
-                trip.TransportPlan.Legs.Select(leg => new TransportLegContract((int)leg.Type, leg.From, leg.To, leg.EstimatedMinutes, leg.Description)).ToArray()));
+                trip.TransportPlan.Legs.Select(leg => new TransportLegContract((int)leg.Type, leg.From, leg.To, leg.EstimatedMinutes, leg.Description)).ToArray()),
+        trip.Latitude,
+        trip.Longitude);
 }
 
 public static class TripFactory
@@ -63,7 +65,10 @@ public static class TripFactory
             request.AirlineCode,
             request.TransportTypes?.Select(type => (TransportType)type).ToArray(),
             ToLuggages(request.Luggages),
-            request.Origin?.Trim());
+            request.Origin?.Trim(),
+            null,
+            request.Latitude,
+            request.Longitude);
 
         return trip with { TransportPlan = TransportPlanner.Build(trip.Origin, trip.Destination, trip.TransportTypesOrEmpty) };
     }

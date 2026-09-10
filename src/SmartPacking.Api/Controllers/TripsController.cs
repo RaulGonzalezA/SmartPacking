@@ -16,6 +16,7 @@ public sealed class TripsController(
     ISmartPackingStore store,
     PackingListService packingLists,
     ProfilePackingListService profilePackingLists,
+    TripDashboardService dashboards,
     IWeatherProvider weather,
     IValidator<SaveTripRequest> tripValidator,
     IValidator<SaveUserTripTemplateRequest> templateValidator,
@@ -41,10 +42,10 @@ public sealed class TripsController(
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
         var template = TripTemplateCatalog.Find(request.TemplateKey);
-        var trip = TripFactory.CreateForCreation(request, Guid.NewGuid(), template);
+        var trip = await ResolveCoordinatesAsync(TripFactory.CreateForCreation(request, Guid.NewGuid(), template), cancellationToken);
         var created = await store.AddTripAsync(user.Id, trip, cancellationToken);
         await store.SetTripProfilesAsync(user.Id, created.Id, [user.Id], cancellationToken);
-        await store.AddChecklistItemsAsync(user.Id, ChecklistDefaults.Create(created.Id), cancellationToken);
+        await store.AddChecklistItemsAsync(user.Id, PackingChecklistDefaults.Create(created.Id), cancellationToken);
         return Created($"/api/trips/{created.Id}", TripMapper.ToResponse(created));
     }
 
@@ -65,7 +66,7 @@ public sealed class TripsController(
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var trip = TripFactory.CreateUpdate(request, tripId);
+        var trip = await ResolveCoordinatesAsync(TripFactory.CreateUpdate(request, tripId), cancellationToken);
         var updated = await store.UpdateTripAsync(user.Id, trip, cancellationToken);
         return updated is null ? NotFoundProblem(viajeNoEncontrado) : Ok(TripMapper.ToResponse(updated));
     }
@@ -84,52 +85,8 @@ public sealed class TripsController(
     public async Task<ActionResult<TripDashboard>> GetDashboardAsync(Guid tripId, [FromQuery] Guid? profileId, CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var trip = await store.GetTripAsync(user.Id, tripId, cancellationToken);
-        if (trip is null)
-        {
-            return NotFoundProblem(viajeNoEncontrado);
-        }
-
-        var (forecast, weatherFeedback) = await GetDashboardWeatherAsync(trip, cancellationToken);
-        var profiles = await store.GetTripProfilesAsync(user.Id, tripId, cancellationToken);
-        var selectedProfileId = Guid.Empty;
-        if (profiles.Any(profile => profile.Id == profileId))
-        {
-            selectedProfileId = profileId!.Value;
-        }
-        else if (profiles.Count > 0)
-        {
-            selectedProfileId = profiles[0].Id;
-        }
-        var familyPlans = new List<ProfileTripPackingPlan>();
-        var progress = new List<PreparationProgressItem>();
-        IReadOnlyList<ChecklistItem> selectedChecklist = [];
-
-        foreach (var profile in profiles)
-        {
-            var plan = await profilePackingLists.GetOrCreateAsync(user.Id, tripId, profile.Id, cancellationToken, forecast);
-            var checklist = await GetOrCreateProfileChecklistAsync(user.Id, tripId, profile.Id, cancellationToken);
-            if (plan is not null)
-            {
-                familyPlans.Add(plan);
-            }
-
-            progress.Add(new PreparationProgressItem(
-                profile.Name,
-                plan?.Plan.Items.Count(item => item.IsPacked) ?? 0,
-                plan?.Plan.Items.Count ?? 0,
-                checklist.Count(item => item.IsPacked),
-                checklist.Count));
-            if (profile.Id == selectedProfileId)
-            {
-                selectedChecklist = checklist;
-            }
-        }
-
-        var selectedPlan = familyPlans.SingleOrDefault(plan => plan.Profile.Id == selectedProfileId);
-        var rules = selectedPlan is null ? null : BuildLuggageRules(trip, selectedPlan);
-        var usage = await store.GetUsageAsync(user.Id, tripId, cancellationToken);
-        return Ok(new TripDashboard(profiles, selectedProfileId, selectedPlan, familyPlans, selectedChecklist, progress, rules, usage, forecast, weatherFeedback));
+        var dashboard = await dashboards.GetAsync(user.Id, tripId, profileId, cancellationToken);
+        return dashboard is null ? NotFoundProblem(viajeNoEncontrado) : Ok(dashboard);
     }
 
     [HttpGet("{tripId:guid}/weather")]
@@ -154,7 +111,7 @@ public sealed class TripsController(
             return Problem(statusCode: StatusCodes.Status422UnprocessableEntity, title: "Previsión aún no disponible", detail: $"La previsión detallada estará disponible a partir del {trip.StartDate.AddDays(-15).ToString("d", System.Globalization.CultureInfo.CurrentCulture)}.");
         }
 
-        var forecast = await weather.GetAsync(trip.Destination, trip.StartDate, trip.EndDate, cancellationToken);
+        var forecast = await weather.GetAsync(trip.Destination, trip.StartDate, trip.EndDate, trip.Latitude, trip.Longitude, cancellationToken);
         return forecast is null
             ? Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Previsión no disponible", detail: "No se ha podido obtener la previsión para este destino en este momento.")
             : Ok(forecast);
@@ -221,7 +178,7 @@ public sealed class TripsController(
         }
 
         var items = await store.GetChecklistAsync(user.Id, tripId, null, cancellationToken);
-        return Ok(items.Count == 0 ? await store.AddChecklistItemsAsync(user.Id, ChecklistDefaults.Create(tripId), cancellationToken) : items);
+        return Ok(items.Count == 0 ? await store.AddChecklistItemsAsync(user.Id, PackingChecklistDefaults.Create(tripId), cancellationToken) : items);
     }
 
     [HttpGet("{tripId:guid}/profiles/{profileId:guid}/checklist")]
@@ -275,43 +232,24 @@ public sealed class TripsController(
     {
         var items = await store.GetChecklistAsync(userId, tripId, profileId, cancellationToken);
         return items.Count == 0
-            ? await store.AddChecklistItemsAsync(userId, ChecklistDefaults.Create(tripId, profileId), cancellationToken)
+            ? await store.AddChecklistItemsAsync(userId, PackingChecklistDefaults.Create(tripId, profileId), cancellationToken)
             : items;
     }
 
-    private async Task<(TripWeatherForecast? Forecast, string? Feedback)> GetDashboardWeatherAsync(Trip trip, CancellationToken cancellationToken)
+    private async Task<Trip> ResolveCoordinatesAsync(Trip trip, CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        if (trip.EndDate < today)
+        if (trip.Latitude is not null && trip.Longitude is not null)
         {
-            return (null, "La previsión no está disponible para viajes ya finalizados.");
+            return trip;
         }
 
-        if (trip.StartDate > today.AddDays(15))
-        {
-            return (null, $"La previsión detallada estará disponible a partir del {trip.StartDate.AddDays(-15).ToString("d", System.Globalization.CultureInfo.CurrentCulture)}.");
-        }
-
-        var forecast = await weather.GetAsync(trip.Destination, trip.StartDate, trip.EndDate, cancellationToken);
-        return forecast is null
-            ? (null, "No se ha podido obtener la previsión para este destino en este momento.")
-            : (new TripWeatherForecast(
-                forecast.Destination,
-                forecast.MinimumCelsius,
-                forecast.MaximumCelsius,
-                forecast.RainProbability,
-                forecast.StartDate,
-                forecast.EndDate,
-                forecast.Daily.Select(day => new DailyTripForecast(day.Date, day.MinimumCelsius, day.MaximumCelsius, day.RainProbability, day.WeatherCode, day.ApparentMinimumCelsius, day.ApparentMaximumCelsius, day.WindSpeedKilometresPerHour)).ToArray()), null);
-    }
-
-    private static LuggageRulesSummary BuildLuggageRules(Trip trip, ProfileTripPackingPlan profilePlan)
-    {
-        var weight = profilePlan.Plan.TotalWeightGrams;
-        var remaining = trip.LuggageAllowanceGrams - weight;
-        var plannedVolume = profilePlan.Plan.Items.Sum(item => EstimatedVolumeMillilitres(item.Recommendation.Item.Type));
-        var capacityVolume = trip.LuggageHeightCentimetres * trip.LuggageWidthCentimetres * trip.LuggageDepthCentimetres * 1000;
-        return new LuggageRulesSummary(trip.LuggageAllowanceGrams, weight, remaining, trip.CabinOnly, remaining >= 0, 100, 1000, plannedVolume, capacityVolume);
+        var destination = trip.Destination.Split(',', 2)[0].Trim();
+        var cities = await weather.SearchCitiesAsync(destination, cancellationToken);
+        var city = cities.FirstOrDefault(candidate => string.Equals(candidate.Name, destination, StringComparison.OrdinalIgnoreCase))
+            ?? (cities.Count > 0 ? cities[0] : null);
+        return city?.Latitude is not null && city.Longitude is not null
+            ? trip with { Latitude = city.Latitude, Longitude = city.Longitude }
+            : trip;
     }
 
     private static int EstimatedVolumeMillilitres(ClothingType type) => type switch
@@ -324,25 +262,6 @@ public sealed class TripsController(
         ClothingType.Sandals => 2500,
         _ => 500
     };
-    private ObjectResult NotFoundProblem(string title) => Problem(statusCode: StatusCodes.Status404NotFound, title: title);
-}
 
-internal static class ChecklistDefaults
-{
-    public static IReadOnlyList<ChecklistItem> Create(Guid tripId, Guid? profileId = null) =>
-    [
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Documents, "DNI o pasaporte", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Documents, "Tarjetas y reservas", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Documents, "Seguro de viaje", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Toiletries, "Cepillo y pasta de dientes", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Toiletries, "Desodorante", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Toiletries, "Protector solar", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Technology, "Móvil y cargador", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Technology, "Adaptador de enchufe", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Technology, "Auriculares", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Health, "Medicación personal", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Health, "Tiritas y básicos", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Other, "Gafas de sol", false, profileId),
-        new(Guid.NewGuid(), tripId, ChecklistCategory.Other, "Botella reutilizable", false, profileId)
-    ];
+    private ObjectResult NotFoundProblem(string title) => Problem(statusCode: StatusCodes.Status404NotFound, title: title);
 }

@@ -31,7 +31,7 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
             using var searchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             searchCancellation.CancelAfter(TimeSpan.FromSeconds(2));
             var response = await httpClient.GetFromJsonAsync<GeocodingResponse>($"https://geocoding-api.open-meteo.com/v1/search?name={Uri.EscapeDataString(query.Trim())}&count=10&language=es&format=json", searchCancellation.Token);
-            var results = response?.Results?.Select(result => new CitySuggestion(result.Name ?? string.Empty, result.Country, result.Admin1)).Where(result => !string.IsNullOrWhiteSpace(result.Name)).ToArray() ?? [];
+            var results = response?.Results?.Select(result => new CitySuggestion(result.Name ?? string.Empty, result.Country, result.Admin1, result.Latitude, result.Longitude)).Where(result => !string.IsNullOrWhiteSpace(result.Name)).ToArray() ?? [];
             var cities = results.Length > 0 ? results : FindFallbackCities(query);
             await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(cities), new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7) }, cancellationToken);
             return cities;
@@ -47,6 +47,9 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
         }
     }
     public async Task<WeatherForecast?> GetAsync(string destination, DateOnly startDate, DateOnly endDate, CancellationToken cancellationToken)
+        => await GetAsync(destination, startDate, endDate, null, null, cancellationToken);
+
+    public async Task<WeatherForecast?> GetAsync(string destination, DateOnly startDate, DateOnly endDate, decimal? latitude, decimal? longitude, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(destination) || endDate < startDate)
         {
@@ -63,7 +66,10 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
 
         var forecastStart = startDate < today ? today : startDate;
         var forecastEnd = endDate > lastForecastDate ? lastForecastDate : endDate;
-        var cacheKey = $"weather:v3:{destination.Trim().ToUpperInvariant()}:{forecastStart:yyyyMMdd}:{forecastEnd:yyyyMMdd}";
+        var coordinateKey = latitude is not null && longitude is not null
+            ? $"{latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}:{longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            : destination.Trim().ToUpperInvariant();
+        var cacheKey = $"weather:v4:{coordinateKey}:{forecastStart:yyyyMMdd}:{forecastEnd:yyyyMMdd}";
         var cachedForecast = await cache.GetStringAsync(cacheKey, cancellationToken);
         if (!string.IsNullOrWhiteSpace(cachedForecast))
         {
@@ -72,17 +78,23 @@ public sealed partial class OpenMeteoWeatherProvider(HttpClient httpClient, IDis
 
         try
         {
-            var city = destination.Split(',', 2)[0].Trim();
-            var location = await httpClient.GetFromJsonAsync<GeocodingResponse>($"https://geocoding-api.open-meteo.com/v1/search?name={Uri.EscapeDataString(city)}&count=1", cancellationToken);
-            var match = location?.Results?.FirstOrDefault();
-            if (match is null)
+            if (latitude is null || longitude is null)
             {
-                return null;
+                var city = destination.Split(',', 2)[0].Trim();
+                var location = await httpClient.GetFromJsonAsync<GeocodingResponse>($"https://geocoding-api.open-meteo.com/v1/search?name={Uri.EscapeDataString(city)}&count=1", cancellationToken);
+                var match = location?.Results?.FirstOrDefault();
+                if (match is null)
+                {
+                    return null;
+                }
+
+                latitude = match.Latitude;
+                longitude = match.Longitude;
             }
 
-            var latitude = match.Latitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var longitude = match.Longitude.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var url = $"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&daily=temperature_2m_min,temperature_2m_max,apparent_temperature_min,apparent_temperature_max,precipitation_probability_max,weather_code,wind_speed_10m_max&timezone=auto&start_date={forecastStart:yyyy-MM-dd}&end_date={forecastEnd:yyyy-MM-dd}";
+            var latitudeValue = latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var longitudeValue = longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var url = $"https://api.open-meteo.com/v1/forecast?latitude={latitudeValue}&longitude={longitudeValue}&daily=temperature_2m_min,temperature_2m_max,apparent_temperature_min,apparent_temperature_max,precipitation_probability_max,weather_code,wind_speed_10m_max&timezone=auto&start_date={forecastStart:yyyy-MM-dd}&end_date={forecastEnd:yyyy-MM-dd}";
             var forecast = await httpClient.GetFromJsonAsync<ForecastResponse>(url, cancellationToken);
             var dailyForecast = forecast?.Daily;
             if (dailyForecast is not { Dates: { Length: > 0 } dates, Minimum: { Length: > 0 } minimum, Maximum: { Length: > 0 } maximum }

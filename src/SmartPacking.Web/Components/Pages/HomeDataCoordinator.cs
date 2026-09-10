@@ -89,6 +89,7 @@ public sealed class HomeDataCoordinator(IWebSmartPackingClient api, ILogger<Home
             state.LuggageRules = dashboard.LuggageRules;
             state.Weather = dashboard.Weather;
             state.WeatherFeedback = dashboard.WeatherFeedback;
+            state.RecommendationDiff = dashboard.RecommendationDiff;
             state.UsageItemIds = dashboard.Usage.Count == 0
                 ? state.Plan?.Plan.Items.Select(item => item.Recommendation.Item.Id).ToHashSet() ?? []
                 : dashboard.Usage.Select(item => item.ClothingItemId).ToHashSet();

@@ -242,7 +242,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
     }
 
     public async Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(Guid userId, CancellationToken cancellationToken) =>
-        (await dbContext.ClothingItems.Where(item => item.UserId == userId).OrderBy(item => item.Name).ToListAsync(cancellationToken)).Select(ToDomain).ToArray();
+        (await dbContext.ClothingItems.AsNoTracking().Where(item => item.UserId == userId).OrderBy(item => item.Name).ToListAsync(cancellationToken)).Select(ToDomain).ToArray();
 
     public async Task<IReadOnlyList<ClothingItem>> GetWardrobePageAsync(Guid userId, bool isDeleted, int page, int pageSize, CancellationToken cancellationToken) =>
         (await dbContext.ClothingItems
@@ -433,14 +433,14 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
             return null;
         }
 
-        var items = await dbContext.PackingListItems.Where(item => item.PackingListId == list.Id).Select(item => new PackingListItem(item.ClothingItemId, item.IsPacked)).ToListAsync(cancellationToken);
+        var items = await dbContext.PackingListItems.AsNoTracking().Where(item => item.PackingListId == list.Id).Select(item => new PackingListItem(item.ClothingItemId, item.IsPacked, item.IsManual, (RecommendationDecision)item.RecommendationDecision)).ToListAsync(cancellationToken);
         return new PackingList(list.Id, list.TripId, list.UserId, list.CreatedAt, items);
     }
 
     public async Task<PackingList> SavePackingListAsync(PackingList packingList, CancellationToken cancellationToken)
     {
         dbContext.PackingLists.Add(new PackingListEntity { Id = packingList.Id, TripId = packingList.TripId, UserId = packingList.UserId, CreatedAt = packingList.CreatedAt });
-        dbContext.PackingListItems.AddRange(packingList.Items.Select(item => new PackingListItemEntity { PackingListId = packingList.Id, ClothingItemId = item.ClothingItemId, IsPacked = item.IsPacked }));
+        dbContext.PackingListItems.AddRange(packingList.Items.Select(item => new PackingListItemEntity { PackingListId = packingList.Id, ClothingItemId = item.ClothingItemId, IsPacked = item.IsPacked, IsManual = item.IsManual, RecommendationDecision = (int)item.RecommendationDecision }));
         await dbContext.SaveChangesAsync(cancellationToken);
         return packingList;
     }
@@ -472,14 +472,32 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
             return null;
         }
 
-        var items = await dbContext.ProfilePackingListItems.Where(item => item.PackingListId == list.Id).Select(item => new PackingListItem(item.ClothingItemId, item.IsPacked)).ToListAsync(cancellationToken);
+        var items = await dbContext.ProfilePackingListItems.AsNoTracking().Where(item => item.PackingListId == list.Id).Select(item => new PackingListItem(item.ClothingItemId, item.IsPacked, item.IsManual, (RecommendationDecision)item.RecommendationDecision)).ToListAsync(cancellationToken);
         return new ProfilePackingList(list.Id, list.TripId, list.ProfileId, list.UserId, list.CreatedAt, items);
+    }
+
+    public async Task<IReadOnlyList<ProfilePackingList>> GetProfilePackingListsAsync(Guid userId, Guid tripId, CancellationToken cancellationToken)
+    {
+        var lists = await dbContext.ProfilePackingLists.AsNoTracking()
+            .Where(list => list.UserId == userId && list.TripId == tripId)
+            .ToListAsync(cancellationToken);
+        if (lists.Count == 0)
+        {
+            return [];
+        }
+
+        var listIds = lists.Select(list => list.Id).ToArray();
+        var items = await dbContext.ProfilePackingListItems.AsNoTracking()
+            .Where(item => listIds.Contains(item.PackingListId))
+            .ToListAsync(cancellationToken);
+        return lists.Select(list => new ProfilePackingList(list.Id, list.TripId, list.ProfileId, list.UserId, list.CreatedAt,
+            items.Where(item => item.PackingListId == list.Id).Select(item => new PackingListItem(item.ClothingItemId, item.IsPacked, item.IsManual, (RecommendationDecision)item.RecommendationDecision)).ToArray())).ToArray();
     }
 
     public async Task<ProfilePackingList> SaveProfilePackingListAsync(ProfilePackingList packingList, CancellationToken cancellationToken)
     {
         dbContext.ProfilePackingLists.Add(new ProfilePackingListEntity { Id = packingList.Id, TripId = packingList.TripId, ProfileId = packingList.ProfileId, UserId = packingList.UserId, CreatedAt = packingList.CreatedAt });
-        dbContext.ProfilePackingListItems.AddRange(packingList.Items.Select(item => new ProfilePackingListItemEntity { PackingListId = packingList.Id, ClothingItemId = item.ClothingItemId, IsPacked = item.IsPacked }));
+        dbContext.ProfilePackingListItems.AddRange(packingList.Items.Select(item => new ProfilePackingListItemEntity { PackingListId = packingList.Id, ClothingItemId = item.ClothingItemId, IsPacked = item.IsPacked, IsManual = item.IsManual, RecommendationDecision = (int)item.RecommendationDecision }));
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -531,15 +549,70 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         var alreadyAdded = await dbContext.ProfilePackingListItems.AnyAsync(item => item.PackingListId == packingListId && item.ClothingItemId == clothingItemId, cancellationToken);
         if (!alreadyAdded)
         {
-            dbContext.ProfilePackingListItems.Add(new ProfilePackingListItemEntity { PackingListId = packingListId, ClothingItemId = clothingItemId, IsPacked = true });
+            dbContext.ProfilePackingListItems.Add(new ProfilePackingListItemEntity { PackingListId = packingListId, ClothingItemId = clothingItemId, IsPacked = true, IsManual = true, RecommendationDecision = (int)RecommendationDecision.Applied });
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         return true;
     }
 
+    public async Task<bool> ApplyProfileRecommendationChangeAsync(Guid userId, Guid packingListId, Guid clothingItemId, RecommendationChangeKind changeKind, CancellationToken cancellationToken)
+    {
+        if (!await dbContext.ProfilePackingLists.AnyAsync(list => list.UserId == userId && list.Id == packingListId, cancellationToken))
+        {
+            return false;
+        }
+        var item = await dbContext.ProfilePackingListItems.SingleOrDefaultAsync(candidate => candidate.PackingListId == packingListId && candidate.ClothingItemId == clothingItemId, cancellationToken);
+        if (changeKind == RecommendationChangeKind.Remove)
+        {
+            if (item is null)
+            {
+                return false;
+            }
+            dbContext.ProfilePackingListItems.Remove(item);
+        }
+        else if (item is null)
+        {
+            dbContext.ProfilePackingListItems.Add(new ProfilePackingListItemEntity { PackingListId = packingListId, ClothingItemId = clothingItemId, IsPacked = false, IsManual = false, RecommendationDecision = (int)RecommendationDecision.Applied });
+        }
+        else
+        {
+            item.IsManual = false;
+            item.RecommendationDecision = (int)RecommendationDecision.Applied;
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> IgnoreProfileRecommendationChangeAsync(Guid userId, Guid packingListId, Guid clothingItemId, RecommendationChangeKind changeKind, CancellationToken cancellationToken)
+    {
+        if (!await dbContext.ProfilePackingLists.AnyAsync(list => list.UserId == userId && list.Id == packingListId, cancellationToken))
+        {
+            return false;
+        }
+        var item = await dbContext.ProfilePackingListItems.SingleOrDefaultAsync(candidate => candidate.PackingListId == packingListId && candidate.ClothingItemId == clothingItemId, cancellationToken);
+        if (item is null && changeKind == RecommendationChangeKind.Add)
+        {
+            dbContext.ProfilePackingListItems.Add(new ProfilePackingListItemEntity { PackingListId = packingListId, ClothingItemId = clothingItemId, IsPacked = false, IsManual = false, RecommendationDecision = (int)RecommendationDecision.Ignored });
+        }
+        else if (item is not null)
+        {
+            item.IsManual = changeKind == RecommendationChangeKind.Remove;
+            item.RecommendationDecision = (int)RecommendationDecision.Ignored;
+        }
+        else
+        {
+            return false;
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<IReadOnlyList<ChecklistItem>> GetChecklistAsync(Guid userId, Guid tripId, Guid? profileId, CancellationToken cancellationToken) =>
         (await dbContext.ChecklistItems.Where(item => item.UserId == userId && item.TripId == tripId && item.ProfileId == profileId).OrderBy(item => item.Category).ThenBy(item => item.Name).ToListAsync(cancellationToken)).Select(item => new ChecklistItem(item.Id, item.TripId, (ChecklistCategory)item.Category, item.Name, item.IsPacked, item.ProfileId)).ToArray();
+
+    public async Task<IReadOnlyList<ChecklistItem>> GetProfileChecklistsAsync(Guid userId, Guid tripId, CancellationToken cancellationToken) =>
+        (await dbContext.ChecklistItems.AsNoTracking().Where(item => item.UserId == userId && item.TripId == tripId && item.ProfileId != null).OrderBy(item => item.Category).ThenBy(item => item.Name).ToListAsync(cancellationToken)).Select(item => new ChecklistItem(item.Id, item.TripId, (ChecklistCategory)item.Category, item.Name, item.IsPacked, item.ProfileId)).ToArray();
     public async Task<IReadOnlyList<ChecklistItem>> AddChecklistItemsAsync(Guid userId, IReadOnlyCollection<ChecklistItem> items, CancellationToken cancellationToken)
     {
         dbContext.ChecklistItems.AddRange(items.Select(item => new ChecklistItemEntity { Id = item.Id, UserId = userId, TripId = item.TripId, ProfileId = item.ProfileId, Category = (int)item.Category, Name = item.Name, IsPacked = item.IsPacked }));
@@ -603,7 +676,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         return new(user.Id, user.Name, user.IsOnboarded, addressDetails?.DisplayAddress ?? user.Address, addressDetails);
     }
     private static UserTripTemplate ToDomain(UserTripTemplateEntity template) => new(template.Id, template.UserId, template.Name, template.Description, JsonSerializer.Deserialize<Style[]>(template.Activities) ?? [], template.MinimumTemperatureCelsius, template.MaximumTemperatureCelsius, template.LuggageAllowanceGrams, template.CabinOnly);
-    private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities), TemplateKey = trip.TemplateKey, LuggageAllowanceGrams = trip.LuggageAllowanceGrams, CabinOnly = trip.CabinOnly, LuggageType = (int)trip.LuggageType, LuggageHeightCentimetres = trip.LuggageHeightCentimetres, LuggageWidthCentimetres = trip.LuggageWidthCentimetres, LuggageDepthCentimetres = trip.LuggageDepthCentimetres, DayPlans = JsonSerializer.Serialize(trip.DayPlansOrEmpty), AirlineCode = trip.AirlineCode, TransportTypes = JsonSerializer.Serialize(trip.TransportTypesOrEmpty), Luggages = JsonSerializer.Serialize(trip.LuggagesOrDefault), Origin = trip.Origin, TransportPlan = trip.TransportPlan is null ? null : JsonSerializer.Serialize(trip.TransportPlan) };
-    private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? [], trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (LuggageType)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, JsonSerializer.Deserialize<TripDayPlan[]>(trip.DayPlans) ?? [], trip.AirlineCode, JsonSerializer.Deserialize<TransportType[]>(trip.TransportTypes) ?? [], JsonSerializer.Deserialize<TripLuggage[]>(trip.Luggages) ?? [], trip.Origin, string.IsNullOrWhiteSpace(trip.TransportPlan) ? null : JsonSerializer.Deserialize<TransportPlan>(trip.TransportPlan));
+    private static TripEntity ToEntity(Guid userId, Trip trip) => new() { Id = trip.Id, UserId = userId, Destination = trip.Destination, StartDate = trip.StartDate, EndDate = trip.EndDate, MinimumTemperatureCelsius = trip.MinimumTemperatureCelsius, MaximumTemperatureCelsius = trip.MaximumTemperatureCelsius, Activities = JsonSerializer.Serialize(trip.Activities), TemplateKey = trip.TemplateKey, LuggageAllowanceGrams = trip.LuggageAllowanceGrams, CabinOnly = trip.CabinOnly, LuggageType = (int)trip.LuggageType, LuggageHeightCentimetres = trip.LuggageHeightCentimetres, LuggageWidthCentimetres = trip.LuggageWidthCentimetres, LuggageDepthCentimetres = trip.LuggageDepthCentimetres, DayPlans = JsonSerializer.Serialize(trip.DayPlansOrEmpty), AirlineCode = trip.AirlineCode, TransportTypes = JsonSerializer.Serialize(trip.TransportTypesOrEmpty), Luggages = JsonSerializer.Serialize(trip.LuggagesOrDefault), Origin = trip.Origin, TransportPlan = trip.TransportPlan is null ? null : JsonSerializer.Serialize(trip.TransportPlan), Latitude = trip.Latitude, Longitude = trip.Longitude };
+    private static Trip ToDomain(TripEntity trip) => new(trip.Id, trip.Destination, trip.StartDate, trip.EndDate, trip.MinimumTemperatureCelsius, trip.MaximumTemperatureCelsius, JsonSerializer.Deserialize<Style[]>(trip.Activities) ?? [], trip.TemplateKey, trip.LuggageAllowanceGrams, trip.CabinOnly, (LuggageType)trip.LuggageType, trip.LuggageHeightCentimetres, trip.LuggageWidthCentimetres, trip.LuggageDepthCentimetres, JsonSerializer.Deserialize<TripDayPlan[]>(trip.DayPlans) ?? [], trip.AirlineCode, JsonSerializer.Deserialize<TransportType[]>(trip.TransportTypes) ?? [], JsonSerializer.Deserialize<TripLuggage[]>(trip.Luggages) ?? [], trip.Origin, string.IsNullOrWhiteSpace(trip.TransportPlan) ? null : JsonSerializer.Deserialize<TransportPlan>(trip.TransportPlan), trip.Latitude, trip.Longitude);
 #pragma warning restore S4136
 }

@@ -13,4 +13,5 @@ public sealed record TripDashboard(
     LuggageRulesSummary? LuggageRules,
     IReadOnlyList<ClothingUsage> Usage,
     TripWeatherForecast? Weather,
-    string? WeatherFeedback);
+    string? WeatherFeedback,
+    PackingRecommendationDiff? RecommendationDiff = null);

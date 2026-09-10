@@ -35,6 +35,24 @@ public sealed class PackingListsController(ISmartPackingStore store) : Controlle
             : Problem(statusCode: StatusCodes.Status404NotFound, title: "Prenda o maleta no encontrada");
     }
 
+    [HttpPost("profile-packing-lists/{packingListId:guid}/recommendation-changes/apply")]
+    public async Task<IActionResult> ApplyRecommendationChangeAsync(Guid packingListId, ResolveRecommendationChangeRequest request, CancellationToken cancellationToken)
+    {
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        return await store.ApplyProfileRecommendationChangeAsync(user.Id, packingListId, request.ClothingItemId, request.ChangeKind, cancellationToken)
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "Cambio o maleta no encontrado");
+    }
+
+    [HttpPost("profile-packing-lists/{packingListId:guid}/recommendation-changes/ignore")]
+    public async Task<IActionResult> IgnoreRecommendationChangeAsync(Guid packingListId, ResolveRecommendationChangeRequest request, CancellationToken cancellationToken)
+    {
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        return await store.IgnoreProfileRecommendationChangeAsync(user.Id, packingListId, request.ClothingItemId, request.ChangeKind, cancellationToken)
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "Cambio o maleta no encontrado");
+    }
+
     [HttpPut("checklist/{itemId:guid}")]
     public async Task<IActionResult> SetChecklistPackedAsync(Guid itemId, SetPackedRequest request, CancellationToken cancellationToken)
     {

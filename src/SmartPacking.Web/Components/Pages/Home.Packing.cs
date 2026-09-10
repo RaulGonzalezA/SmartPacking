@@ -1,3 +1,4 @@
+using SmartPacking.Application;
 using SmartPacking.Domain;
 
 #pragma warning disable S3881
@@ -25,6 +26,25 @@ public partial class Home
 
         await Api.AddProfilePackingListItemAsync(State.Plan.Plan.PackingListId, id, CancellationToken.None);
         await RefreshPackingAsync();
+    });
+
+    private Task ResolveRecommendationChangeAsync(ResolvePackingRecommendationChangeCommand command) => RunAsync(async () =>
+    {
+        if (State.Plan is null)
+        {
+            return;
+        }
+
+        if (command.Apply)
+        {
+            await Api.ApplyProfileRecommendationChangeAsync(State.Plan.Plan.PackingListId, command.ClothingItemId, command.ChangeKind, CancellationToken.None);
+        }
+        else
+        {
+            await Api.IgnoreProfileRecommendationChangeAsync(State.Plan.Plan.PackingListId, command.ClothingItemId, command.ChangeKind, CancellationToken.None);
+        }
+
+        await RefreshTripDetailsAsync();
     });
 
     private Task AddToiletryAsync(AddChecklistItemCommand command) => RunAsync(async () =>

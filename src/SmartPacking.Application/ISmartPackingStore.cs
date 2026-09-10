@@ -33,10 +33,14 @@ public interface ISmartPackingStore
     Task<PackingList> SavePackingListAsync(PackingList packingList, CancellationToken cancellationToken);
     Task<bool> SetPackedAsync(Guid userId, Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken);
     Task<ProfilePackingList?> GetProfilePackingListAsync(Guid userId, Guid tripId, Guid profileId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<ProfilePackingList>> GetProfilePackingListsAsync(Guid userId, Guid tripId, CancellationToken cancellationToken);
     Task<ProfilePackingList> SaveProfilePackingListAsync(ProfilePackingList packingList, CancellationToken cancellationToken);
     Task<bool> SetProfilePackedAsync(Guid userId, Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken);
     Task<bool> AddProfilePackingListItemAsync(Guid userId, Guid packingListId, Guid clothingItemId, CancellationToken cancellationToken);
+    Task<bool> ApplyProfileRecommendationChangeAsync(Guid userId, Guid packingListId, Guid clothingItemId, RecommendationChangeKind changeKind, CancellationToken cancellationToken);
+    Task<bool> IgnoreProfileRecommendationChangeAsync(Guid userId, Guid packingListId, Guid clothingItemId, RecommendationChangeKind changeKind, CancellationToken cancellationToken);
     Task<IReadOnlyList<ChecklistItem>> GetChecklistAsync(Guid userId, Guid tripId, Guid? profileId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<ChecklistItem>> GetProfileChecklistsAsync(Guid userId, Guid tripId, CancellationToken cancellationToken);
     Task<IReadOnlyList<ChecklistItem>> AddChecklistItemsAsync(Guid userId, IReadOnlyCollection<ChecklistItem> items, CancellationToken cancellationToken);
     Task<bool> SetChecklistPackedAsync(Guid userId, Guid checklistItemId, bool isPacked, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClothingUsage>> GetUsageAsync(Guid userId, Guid tripId, CancellationToken cancellationToken);

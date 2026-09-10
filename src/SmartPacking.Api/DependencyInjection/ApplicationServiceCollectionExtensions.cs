@@ -10,6 +10,7 @@ public static class ApplicationServiceCollectionExtensions
     {
         services.AddScoped<PackingListService>();
         services.AddScoped<ProfilePackingListService>();
+        services.AddScoped<TripDashboardService>();
 
         return services;
     }

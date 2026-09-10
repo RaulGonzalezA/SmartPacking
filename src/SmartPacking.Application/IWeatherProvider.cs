@@ -4,6 +4,8 @@ public interface IWeatherProvider
 {
     Task<IReadOnlyList<CitySuggestion>> SearchCitiesAsync(string query, CancellationToken cancellationToken);
     Task<WeatherForecast?> GetAsync(string destination, DateOnly startDate, DateOnly endDate, CancellationToken cancellationToken);
+    Task<WeatherForecast?> GetAsync(string destination, DateOnly startDate, DateOnly endDate, decimal? latitude, decimal? longitude, CancellationToken cancellationToken) =>
+        GetAsync(destination, startDate, endDate, cancellationToken);
 }
 
 public sealed record DailyWeatherForecast(

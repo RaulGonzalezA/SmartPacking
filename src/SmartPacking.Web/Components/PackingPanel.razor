@@ -15,6 +15,22 @@ else if (IsActive && Plan is not null)
     <section class="hero"><div><p>@Plan.Plan.Trip.Destination · @Plan.Plan.Trip.Days días</p><h2>Maleta de @Plan.Profile.Name</h2></div></section>
     <section class="traveller-select"><label>Maleta de <select disabled="@IsBusy" value="@SelectedProfileId" @onchange="SelectProfile">@foreach (var profile in TripProfiles) { <option value="@profile.Id">@profile.Name</option> }</select></label></section>
     <PreparationProgressPanel Items="PreparationProgress" /><LuggageRulesPanel Rules="LuggageRules" /><PackingInsightsPanel Insights="Insights" />
+    @if (RecommendationDiff is { HasChanges: true } diff)
+    {
+        <section class="family-section recommendation-diff" aria-labelledby="recommendation-changes-title">
+            <header><div><p class="type">Maleta actualizada</p><h2 id="recommendation-changes-title">Han cambiado las recomendaciones</h2><p class="muted">Revisa cada propuesta antes de modificar tu maleta. Tus elecciones manuales se conservarán.</p></div><span>@diff.Changes.Count cambio@(diff.Changes.Count == 1 ? string.Empty : "s")</span></header>
+            <div class="recommendation-diff-grid">
+                @foreach (var change in diff.Changes)
+                {
+                    <article class="recommendation-diff-card @(change.Kind == RecommendationChangeKind.Add ? "add" : "remove")">
+                        <span aria-hidden="true">@(change.Kind == RecommendationChangeKind.Add ? "＋" : "−")</span>
+                        <div><p class="type">@(change.Kind == RecommendationChangeKind.Add ? "Añadir" : "Retirar")</p><h3>@change.Item.Name</h3><p>@change.Reason</p></div>
+                        <div class="recommendation-diff-actions"><button class="secondary" disabled="@IsBusy" @onclick="() => ResolveRecommendationChange(change, false)">Ignorar</button><button disabled="@IsBusy" @onclick="() => ResolveRecommendationChange(change, true)">@(change.Kind == RecommendationChangeKind.Add ? "Añadir" : "Retirar")</button></div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
     @if (PriorityTasks.Count > 0)
     {
         <section class="preparation-priorities"><header><div><p class="type">Siguiente paso</p><h2>Las 3 tareas más importantes</h2><p class="muted">Completa estas acciones para dejar la maleta lista antes.</p></div><span aria-hidden="true">✦</span></header><ol>@foreach (var task in PriorityTasks) { <li><span aria-hidden="true">@task.Icon</span><div><small>@task.Label</small><strong>@task.Description</strong></div></li> }</ol></section>

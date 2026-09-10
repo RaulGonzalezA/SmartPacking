@@ -44,4 +44,21 @@ public sealed class PackingListsControllerTests
         var problem = result.Should().BeOfType<ObjectResult>().Subject;
         problem.StatusCode.Should().Be(StatusCodes.Status404NotFound);
     }
+
+    [Fact]
+    public async Task ApplyRecommendationChangeUsesTheAuthenticatedUsersPackingList()
+    {
+        var store = Substitute.For<ISmartPackingStore>();
+        var user = new UserProfile(Guid.NewGuid(), "Raúl", true);
+        var packingListId = Guid.NewGuid();
+        var garmentId = Guid.NewGuid();
+        store.GetDefaultUserAsync(Arg.Any<CancellationToken>()).Returns(user);
+        store.ApplyProfileRecommendationChangeAsync(user.Id, packingListId, garmentId, RecommendationChangeKind.Add, Arg.Any<CancellationToken>()).Returns(true);
+        var controller = new PackingListsController(store);
+
+        var result = await controller.ApplyRecommendationChangeAsync(packingListId, new ResolveRecommendationChangeRequest(garmentId, RecommendationChangeKind.Add), CancellationToken.None);
+
+        result.Should().BeOfType<NoContentResult>();
+        await store.Received(1).ApplyProfileRecommendationChangeAsync(user.Id, packingListId, garmentId, RecommendationChangeKind.Add, Arg.Any<CancellationToken>());
+    }
 }

@@ -183,8 +183,8 @@ namespace SmartPacking.Infrastructure.SqlServer.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<long>("OccurredAt")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");
@@ -227,8 +227,14 @@ namespace SmartPacking.Infrastructure.SqlServer.Migrations
                     b.Property<Guid>("ClothingItemId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("IsManual")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsPacked")
                         .HasColumnType("bit");
+
+                    b.Property<int>("RecommendationDecision")
+                        .HasColumnType("int");
 
                     b.HasKey("PackingListId", "ClothingItemId");
 
@@ -269,8 +275,14 @@ namespace SmartPacking.Infrastructure.SqlServer.Migrations
                     b.Property<Guid>("ClothingItemId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("IsManual")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsPacked")
                         .HasColumnType("bit");
+
+                    b.Property<int>("RecommendationDecision")
+                        .HasColumnType("int");
 
                     b.HasKey("PackingListId", "ClothingItemId");
 
@@ -303,6 +315,12 @@ namespace SmartPacking.Infrastructure.SqlServer.Migrations
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("LuggageAllowanceGrams")
                         .HasColumnType("int");
@@ -383,8 +401,8 @@ namespace SmartPacking.Infrastructure.SqlServer.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("datetimeoffset");
+                    b.Property<long>("OccurredAt")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uniqueidentifier");

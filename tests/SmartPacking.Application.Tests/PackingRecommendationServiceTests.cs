@@ -8,6 +8,32 @@ namespace SmartPacking.Application.Tests;
 public sealed class PackingRecommendationServiceTests
 {
     [Fact]
+    public void RecommendationDiffKeepsManualAndIgnoredChoicesOutOfRemovalSuggestions()
+    {
+        var manual = new ClothingItem(Guid.NewGuid(), "Jersey personal", ClothingType.Sweater, Season.Winter, "Azul", 4, false, Style.Casual, 300, true, true, 80, [], false);
+        var ignored = manual with { Id = Guid.NewGuid(), Name = "Abrigo ignorado" };
+        var recommendation = new PackingRecommendation(DemoData.RomeTrip, [], 0);
+        var result = PackingRecommendationDiffService.Create(
+            [new PackingListItem(manual.Id, false, true), new PackingListItem(ignored.Id, false, false, RecommendationDecision.Ignored)],
+            recommendation,
+            new Dictionary<Guid, ClothingItem> { [manual.Id] = manual, [ignored.Id] = ignored },
+            new HashSet<Guid> { ignored.Id });
+
+        result.HasChanges.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RecommendationDiffSuggestsAnItemMissingFromTheCurrentPackingList()
+    {
+        var shirt = new ClothingItem(Guid.NewGuid(), "Camiseta", ClothingType.TShirt, Season.Summer, "Blanco", 1, false, Style.Casual, 150, true, true, 80, [], false);
+        var recommendation = new PackingRecommendation(DemoData.RomeTrip, [new RecommendedItem(shirt, 10, ["Hace calor"])], shirt.WeightGrams ?? 0);
+
+        var result = PackingRecommendationDiffService.Create([], recommendation, new Dictionary<Guid, ClothingItem> { [shirt.Id] = shirt });
+
+        result.Changes.Should().ContainSingle(change => change.Kind == RecommendationChangeKind.Add && change.Item.Id == shirt.Id);
+    }
+
+    [Fact]
     public void TransportPlannerBuildsAirportTransferForOcanaToRome()
     {
         var plan = TransportPlanner.Build("Ocaña, Toledo", "Roma", [TransportType.Plane]);

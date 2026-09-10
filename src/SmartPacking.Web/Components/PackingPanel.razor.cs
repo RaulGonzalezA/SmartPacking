@@ -46,6 +46,9 @@ public partial class PackingPanel
     public PackingInsights? Insights { get; set; }
 
     [Parameter]
+    public PackingRecommendationDiff? RecommendationDiff { get; set; }
+
+    [Parameter]
     public EventCallback<Guid> SelectedProfileChanged { get; set; }
 
     [Parameter]
@@ -53,6 +56,9 @@ public partial class PackingPanel
 
     [Parameter]
     public EventCallback<Guid> ManualClothingAdded { get; set; }
+
+    [Parameter]
+    public EventCallback<ResolvePackingRecommendationChangeCommand> RecommendationChangeResolved { get; set; }
 
     [Parameter]
     public EventCallback<SetChecklistItemStatusCommand> ChecklistPackedChanged { get; set; }
@@ -81,6 +87,8 @@ public partial class PackingPanel
     }
 
     private void MarkMissing(ClothingType type) => dismissedMissing.Add(type);
+    private Task ResolveRecommendationChange(PackingRecommendationChange change, bool apply) =>
+        RecommendationChangeResolved.InvokeAsync(new ResolvePackingRecommendationChangeCommand(change.Item.Id, change.Kind, apply));
     private static string MissingIcon(ClothingType type) => type switch
     {
         ClothingType.Socks => "🧦",

@@ -183,8 +183,8 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<long>("OccurredAt")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -227,8 +227,14 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                     b.Property<Guid>("ClothingItemId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsManual")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsPacked")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("RecommendationDecision")
+                        .HasColumnType("integer");
 
                     b.HasKey("PackingListId", "ClothingItemId");
 
@@ -269,8 +275,14 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                     b.Property<Guid>("ClothingItemId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsManual")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsPacked")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("RecommendationDecision")
+                        .HasColumnType("integer");
 
                     b.HasKey("PackingListId", "ClothingItemId");
 
@@ -303,6 +315,12 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasColumnType("numeric");
 
                     b.Property<int>("LuggageAllowanceGrams")
                         .HasColumnType("integer");
@@ -383,8 +401,8 @@ namespace SmartPacking.Infrastructure.PostgreSql.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<long>("OccurredAt")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
