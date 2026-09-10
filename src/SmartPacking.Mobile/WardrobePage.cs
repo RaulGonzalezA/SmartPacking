@@ -133,7 +133,7 @@ public sealed class WardrobePage : ContentPage
         return new WardrobeItemViewModel(item, photoBytes);
     }
 
-    private static View CreateGarmentCard()
+    private static Grid CreateGarmentCard()
     {
         var image = new Image
         {

@@ -31,7 +31,9 @@ public sealed class MobilePhotoService : IMobilePhotoService
     public async Task<PreparedPhoto?> PickAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var file = await MediaPicker.Default.PickPhotoAsync(new MediaPickerOptions { Title = "Selecciona una prenda" });
+        var files = await MediaPicker.Default.PickPhotosAsync(new MediaPickerOptions { Title = "Selecciona una prenda" });
+        cancellationToken.ThrowIfCancellationRequested();
+        var file = files.FirstOrDefault();
         return file is null ? null : await PrepareAsync(file, cancellationToken);
     }
 
@@ -64,8 +66,10 @@ public sealed class MobilePhotoService : IMobilePhotoService
                 outputBitmap = resized;
             }
 
+            var jpegFormat = Bitmap.CompressFormat.Jpeg
+                ?? throw new InvalidOperationException("El dispositivo no dispone del formato JPEG requerido.");
             using var output = new MemoryStream();
-            if (!outputBitmap.Compress(Bitmap.CompressFormat.Jpeg, JpegQuality, output))
+            if (!outputBitmap.Compress(jpegFormat, JpegQuality, output))
             {
                 throw new InvalidOperationException("No se ha podido optimizar la fotografía.");
             }

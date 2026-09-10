@@ -311,7 +311,7 @@ public sealed class AddGarmentPage : ContentPage
 
     private static Picker CreatePicker<T>(string title, IReadOnlyList<PickerOption<T>> options)
     {
-        var picker = new Picker { Title = title, ItemsSource = options };
+        var picker = new Picker { Title = title, ItemsSource = options.ToArray() };
         picker.SelectedIndex = 0;
         return picker;
     }
