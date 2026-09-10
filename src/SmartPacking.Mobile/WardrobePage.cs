@@ -122,7 +122,18 @@ public sealed class WardrobePage : ContentPage
             await gate.WaitAsync(cancellationToken);
             try
             {
-                photoBytes = await client.GetClothingPhotoAsync(item.Id, cancellationToken);
+                try
+                {
+                    photoBytes = await client.GetClothingPhotoAsync(item.Id, cancellationToken);
+                }
+                catch (HttpRequestException)
+                {
+                    photoBytes = null;
+                }
+                catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    photoBytes = null;
+                }
             }
             finally
             {
