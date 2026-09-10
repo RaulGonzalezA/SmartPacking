@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
 using SmartPacking.Api;
+using SmartPacking.Api.Validation;
 using SmartPacking.Application;
 using SmartPacking.Domain;
 
@@ -7,7 +9,13 @@ namespace SmartPacking.Api.Controllers;
 
 [ApiController]
 [Route("api")]
-public sealed class ProfilesController(ISmartPackingStore store, ProfilePackingListService profilePackingLists) : ControllerBase
+public sealed class ProfilesController(
+    ISmartPackingStore store,
+    ProfilePackingListService profilePackingLists,
+    IValidator<CreateFamilyProfileRequest> createProfileValidator,
+    IValidator<UpdateFamilyProfileRequest> updateProfileValidator,
+    IValidator<SetTripProfilesRequest> tripProfilesValidator,
+    IValidator<CreateChecklistItemRequest> checklistValidator) : ControllerBase
 {
     [HttpGet("profiles")]
     public async Task<ActionResult<IReadOnlyList<FamilyProfile>>> GetAsync(CancellationToken cancellationToken)
@@ -19,9 +27,10 @@ public sealed class ProfilesController(ISmartPackingStore store, ProfilePackingL
     [HttpPost("profiles")]
     public async Task<ActionResult<FamilyProfile>> CreateAsync(CreateFamilyProfileRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
+        var validationProblem = await createProfileValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["name"] = ["Escribe un nombre para el perfil."] }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
@@ -32,9 +41,10 @@ public sealed class ProfilesController(ISmartPackingStore store, ProfilePackingL
     [HttpPut("profiles/{profileId:guid}")]
     public async Task<ActionResult<FamilyProfile>> UpdateAsync(Guid profileId, UpdateFamilyProfileRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
+        var validationProblem = await updateProfileValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["name"] = ["Escribe un nombre para el perfil."] }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
@@ -68,6 +78,12 @@ public sealed class ProfilesController(ISmartPackingStore store, ProfilePackingL
     [HttpPut("trips/{tripId:guid}/profiles")]
     public async Task<IActionResult> SetTripProfilesAsync(Guid tripId, SetTripProfilesRequest request, CancellationToken cancellationToken)
     {
+        var validationProblem = await tripProfilesValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
+        {
+            return BadRequest(validationProblem);
+        }
+
         var user = await store.GetDefaultUserAsync(cancellationToken);
         if (await store.GetTripAsync(user.Id, tripId, cancellationToken) is null)
         {
@@ -94,9 +110,10 @@ public sealed class ProfilesController(ISmartPackingStore store, ProfilePackingL
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ChecklistItem>> AddProfileChecklistItemAsync(Guid tripId, Guid profileId, CreateChecklistItemRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
+        var validationProblem = await checklistValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["name"] = ["Escribe el nombre del artículo."] }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);

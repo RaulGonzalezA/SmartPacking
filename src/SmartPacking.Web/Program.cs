@@ -102,6 +102,20 @@ if (authenticationEnabled)
     });
     app.MapGet("/auth/logout", () => Results.SignOut(new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/login" }, [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]));
 }
+var photoEndpoint = app.MapGet("/api/wardrobe/{clothingItemId:guid}/photo", async (
+    Guid clothingItemId,
+    IWebSmartPackingClient api,
+    CancellationToken cancellationToken) =>
+{
+    var photo = await api.GetClothingPhotoAsync(clothingItemId, cancellationToken);
+    return photo is null
+        ? Results.NotFound()
+        : Results.File(photo.Content, photo.ContentType);
+});
+if (authenticationEnabled)
+{
+    photoEndpoint.RequireAuthorization();
+}
 app.UseAntiforgery();
 var components = app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 if (authenticationEnabled)

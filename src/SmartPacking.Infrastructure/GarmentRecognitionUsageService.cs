@@ -73,8 +73,9 @@ public sealed class GarmentRecognitionUsageService(
         var periodStart = new DateOnly(now.Year, now.Month, 1);
         var start = new DateTimeOffset(periodStart.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
         var end = start.AddMonths(1);
-        var entries = await dbContext.GarmentRecognitionEvents.Where(item => item.UserId == user.Id).ToListAsync(cancellationToken);
-        var used = entries.Count(item => item.OccurredAt >= start && item.OccurredAt < end);
+        var used = await dbContext.GarmentRecognitionEvents.CountAsync(
+            item => item.UserId == user.Id && item.OccurredAt >= start && item.OccurredAt < end,
+            cancellationToken);
         var plan = NormalizePlan(entity.AiPlan);
         var limit = PlanLimit(plan);
         return CreateUsageResult(used, limit, entity.AiRecognitionCredits, plan, periodStart);

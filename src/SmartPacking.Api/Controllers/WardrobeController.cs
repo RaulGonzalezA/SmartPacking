@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
 using SmartPacking.Api.Contracts;
+using SmartPacking.Api.Validation;
 using SmartPacking.Application;
 using SmartPacking.Contracts;
 
@@ -7,7 +9,7 @@ namespace SmartPacking.Api.Controllers;
 
 [ApiController]
 [Route("api/wardrobe")]
-public sealed class WardrobeController(ISmartPackingStore store) : ControllerBase
+public sealed class WardrobeController(ISmartPackingStore store, IValidator<UpsertClothingItemRequest> clothingItemValidator) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(ApiResult<IReadOnlyList<ClothingItemResponse>>), StatusCodes.Status200OK)]
@@ -58,9 +60,10 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ApiResult<ClothingItemResponse>>> CreateAsync(UpsertClothingItemRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name) || request.WarmthLevel is < 1 or > 10)
+        var validationProblem = await clothingItemValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["clothingItem"] = ["Introduce datos válidos para la prenda."] }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
@@ -80,9 +83,10 @@ public sealed class WardrobeController(ISmartPackingStore store) : ControllerBas
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ApiResult<ClothingItemResponse>>> UpdateAsync(Guid clothingItemId, UpsertClothingItemRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name) || request.WarmthLevel is < 1 or > 10)
+        var validationProblem = await clothingItemValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["clothingItem"] = ["Introduce datos válidos para la prenda."] }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);

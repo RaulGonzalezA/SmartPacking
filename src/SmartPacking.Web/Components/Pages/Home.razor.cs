@@ -30,7 +30,10 @@ public partial class Home : ComponentBase, IDisposable
     private readonly HashSet<string> permissions = new(StringComparer.Ordinal);
     private readonly HashSet<string> roles = new(StringComparer.OrdinalIgnoreCase);
     private bool HasPermission(string permission) => permissions.Contains(permission);
-    private bool HasAdminAccess => roles.Contains("Admin");
+    // Support can access the administration area when Auth0 grants at least one
+    // administrative permission. The individual panels still check their own
+    // permission before rendering or invoking an endpoint.
+    private bool HasAdminAccess => roles.Contains("Admin") || permissions.Overlaps(AdminPermissions);
     private string? DefaultOrigin
     {
         get

@@ -190,6 +190,20 @@ public sealed class SmartPackingApiClient(HttpClient httpClient) : IWebSmartPack
         return result?.Data.ImageUrl ?? throw new InvalidOperationException("La API no devolvió la dirección de la foto.");
     }
 
+    public async Task<PhotoDownload?> GetClothingPhotoAsync(Guid clothingItemId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await httpClient.GetAsync($"api/wardrobe/{clothingItemId}/photo", cancellationToken);
+            var content = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            return new PhotoDownload(content, response.Content.Headers.ContentType?.MediaType ?? "image/jpeg");
+        }
+        catch (ApiProblemException exception) when (exception.StatusCode == StatusCodes.Status404NotFound)
+        {
+            return null;
+        }
+    }
+
     public async Task SetProfilePackedAsync(Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken) =>
         await EnsureSuccessAsync(await httpClient.PutAsJsonAsync($"api/profile-packing-lists/{packingListId}/items/{clothingItemId}", new { isPacked }, cancellationToken));
 

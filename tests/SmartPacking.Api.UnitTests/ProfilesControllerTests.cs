@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using SmartPacking.Api;
 using SmartPacking.Api.Controllers;
+using SmartPacking.Api.Validation;
 using SmartPacking.Application;
 using SmartPacking.Domain;
 using Xunit;
@@ -63,5 +64,11 @@ public sealed class ProfilesControllerTests
         await store.DidNotReceive().SetTripProfilesAsync(user.Id, tripId, Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
     }
 
-    private static ProfilesController CreateController(ISmartPackingStore store) => new(store, new ProfilePackingListService(store));
+    private static ProfilesController CreateController(ISmartPackingStore store) => new(
+        store,
+        new ProfilePackingListService(store),
+        new CreateFamilyProfileRequestValidator(),
+        new UpdateFamilyProfileRequestValidator(),
+        new SetTripProfilesRequestValidator(),
+        new CreateChecklistItemRequestValidator());
 }

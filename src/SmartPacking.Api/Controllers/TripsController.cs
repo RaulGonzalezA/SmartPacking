@@ -11,7 +11,14 @@ namespace SmartPacking.Api.Controllers;
 
 [ApiController]
 [Route("api/trips")]
-public sealed class TripsController(ISmartPackingStore store, PackingListService packingLists, ProfilePackingListService profilePackingLists, OpenMeteoWeatherProvider weather, IValidator<SaveTripRequest> tripValidator) : ControllerBase
+public sealed class TripsController(
+    ISmartPackingStore store,
+    PackingListService packingLists,
+    ProfilePackingListService profilePackingLists,
+    OpenMeteoWeatherProvider weather,
+    IValidator<SaveTripRequest> tripValidator,
+    IValidator<SaveUserTripTemplateRequest> templateValidator,
+    IValidator<CreateChecklistItemRequest> checklistValidator) : ControllerBase
 {
     private const string viajeNoEncontrado = "Viaje no encontrado";
 
@@ -183,9 +190,10 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
     [HttpPost("user-templates")]
     public async Task<ActionResult<UserTripTemplate>> CreateUserTemplateAsync(SaveUserTripTemplateRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name) || request.MaximumTemperatureCelsius < request.MinimumTemperatureCelsius || request.LuggageAllowanceGrams < 0)
+        var validationProblem = await templateValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["template"] = ["Introduce una plantilla válida."] }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
@@ -248,9 +256,10 @@ public sealed class TripsController(ISmartPackingStore store, PackingListService
     [HttpPost("{tripId:guid}/checklist")]
     public async Task<ActionResult<ChecklistItem>> AddChecklistItemAsync(Guid tripId, CreateChecklistItemRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
+        var validationProblem = await checklistValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["name"] = ["Escribe un elemento para la checklist."] }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);

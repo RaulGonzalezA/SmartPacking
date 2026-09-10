@@ -32,7 +32,10 @@ using (var scope = app.Services.CreateScope())
     {
         await dbContext.Database.MigrateAsync();
     }
-    await scope.ServiceProvider.GetRequiredService<ISmartPackingStore>().SeedAsync(CancellationToken.None);
+    if (app.Environment.IsDevelopment())
+    {
+        await scope.ServiceProvider.GetRequiredService<ISmartPackingStore>().SeedAsync(CancellationToken.None);
+    }
 }
 app.UseStaticFiles();
 app.UseExceptionHandler();

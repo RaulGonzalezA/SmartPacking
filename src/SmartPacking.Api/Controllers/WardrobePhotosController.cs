@@ -9,6 +9,24 @@ namespace SmartPacking.Api.Controllers;
 [Route("api/wardrobe")]
 public sealed class WardrobePhotosController(ISmartPackingStore store, IPhotoStorage photoStorage) : ControllerBase
 {
+    [HttpGet("{clothingItemId:guid}/photo")]
+    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAsync(Guid clothingItemId, CancellationToken cancellationToken)
+    {
+        var user = await store.GetDefaultUserAsync(cancellationToken);
+        var clothingItem = (await store.GetWardrobeAsync(user.Id, cancellationToken)).SingleOrDefault(item => item.Id == clothingItemId);
+        if (clothingItem is null || string.IsNullOrWhiteSpace(clothingItem.PhotoUrl))
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Foto no encontrada");
+        }
+
+        var photo = await photoStorage.OpenReadAsync(clothingItemId, cancellationToken);
+        return photo is null
+            ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Foto no encontrada")
+            : File(photo, "image/jpeg");
+    }
+
     [HttpPost("{clothingItemId:guid}/photo")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ApiResult<PhotoUploadResponse>), StatusCodes.Status200OK)]

@@ -39,9 +39,12 @@ public interface IWebSmartPackingClient
     Task DeleteClothingAsync(Guid clothingItemId, CancellationToken cancellationToken);
     Task RestoreClothingAsync(Guid clothingItemId, CancellationToken cancellationToken);
     Task<string> UploadClothingPhotoAsync(Guid clothingItemId, Stream content, string contentType, string fileName, CancellationToken cancellationToken);
+    Task<PhotoDownload?> GetClothingPhotoAsync(Guid clothingItemId, CancellationToken cancellationToken);
     Task SetProfilePackedAsync(Guid packingListId, Guid clothingItemId, bool isPacked, CancellationToken cancellationToken);
     Task AddProfilePackingListItemAsync(Guid packingListId, Guid clothingItemId, CancellationToken cancellationToken);
     Task SetChecklistPackedAsync(Guid itemId, bool isPacked, CancellationToken cancellationToken);
     Task<IReadOnlyList<ClothingUsage>> GetUsageAsync(Guid tripId, CancellationToken cancellationToken);
     Task SaveUsageAsync(Guid tripId, IReadOnlyCollection<ClothingUsage> usage, CancellationToken cancellationToken);
 }
+
+public sealed record PhotoDownload(byte[] Content, string ContentType);

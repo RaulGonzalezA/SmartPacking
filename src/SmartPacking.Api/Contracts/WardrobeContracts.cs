@@ -10,7 +10,24 @@ public sealed record UpdateClothingStatusRequest(bool IsClean, bool IsAvailable)
 
 public static class WardrobeMappings
 {
-    public static ClothingItemResponse ToResponse(this ClothingItem item) => new(item.Id, item.Name, item.Type, item.Season, item.Color, item.WarmthLevel, item.Waterproof, item.Style, item.WeightGrams, item.IsClean, item.IsAvailable, item.PreferenceScore, item.CombinesWith, item.IsDeleted, item.OwnerProfileId, item.PhotoUrl, item.Material);
+    public static ClothingItemResponse ToResponse(this ClothingItem item) => new(
+        item.Id,
+        item.Name,
+        item.Type,
+        item.Season,
+        item.Color,
+        item.WarmthLevel,
+        item.Waterproof,
+        item.Style,
+        item.WeightGrams,
+        item.IsClean,
+        item.IsAvailable,
+        item.PreferenceScore,
+        item.CombinesWith,
+        item.IsDeleted,
+        item.OwnerProfileId,
+        string.IsNullOrWhiteSpace(item.PhotoUrl) ? null : $"/api/wardrobe/{item.Id}/photo",
+        item.Material);
 
     public static ClothingItem ToDomain(this UpsertClothingItemRequest request, Guid id, bool isDeleted = false) =>
         new(id, request.Name.Trim(), request.Type, request.Season, request.Color.Trim(), request.WarmthLevel, request.Waterproof, request.Style, request.WeightGrams, request.IsClean, request.IsAvailable, request.PreferenceScore, request.CombinesWith ?? [], isDeleted, request.OwnerProfileId, null, request.Material?.Trim());

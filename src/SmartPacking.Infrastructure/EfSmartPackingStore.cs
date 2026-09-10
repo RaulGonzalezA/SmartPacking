@@ -162,6 +162,7 @@ public sealed class EfSmartPackingStore(SmartPackingDbContext dbContext, IExtern
         dbContext.ProfilePackingLists.RemoveRange(dbContext.ProfilePackingLists.Where(item => item.UserId == userId));
         dbContext.ChecklistItems.RemoveRange(dbContext.ChecklistItems.Where(item => item.UserId == userId));
         dbContext.ClothingUsage.RemoveRange(dbContext.ClothingUsage.Where(item => item.UserId == userId));
+        dbContext.GarmentRecognitionEvents.RemoveRange(dbContext.GarmentRecognitionEvents.Where(item => item.UserId == userId));
         dbContext.TripProfiles.RemoveRange(dbContext.TripProfiles.Where(item => item.UserId == userId));
         dbContext.Trips.RemoveRange(dbContext.Trips.Where(item => item.UserId == userId));
         dbContext.ClothingItems.RemoveRange(dbContext.ClothingItems.Where(item => item.UserId == userId));

@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using FluentValidation;
+using SmartPacking.Api.Contracts;
+using SmartPacking.Api.Controllers;
 using SmartPacking.Api.Validation;
 using SmartPacking.Contracts;
 
@@ -17,6 +19,15 @@ public static class ApiServiceCollectionExtensions
         services.AddScoped<IValidator<CompleteUserOnboardingRequest>, CompleteUserOnboardingRequestValidator>();
         services.AddScoped<IValidator<UpdateCurrentUserRequest>, UpdateCurrentUserRequestValidator>();
         services.AddScoped<IValidator<SaveTripRequest>, SaveTripRequestValidator>();
+        services.AddScoped<IValidator<CreateFamilyProfileRequest>, CreateFamilyProfileRequestValidator>();
+        services.AddScoped<IValidator<UpdateFamilyProfileRequest>, UpdateFamilyProfileRequestValidator>();
+        services.AddScoped<IValidator<CreateChecklistItemRequest>, CreateChecklistItemRequestValidator>();
+        services.AddScoped<IValidator<SetTripProfilesRequest>, SetTripProfilesRequestValidator>();
+        services.AddScoped<IValidator<SaveUserTripTemplateRequest>, SaveUserTripTemplateRequestValidator>();
+        services.AddScoped<IValidator<UpsertClothingItemRequest>, UpsertClothingItemRequestValidator>();
+        services.AddScoped<IValidator<DeleteCurrentUserRequest>, DeleteCurrentUserRequestValidator>();
+        services.AddScoped<IValidator<SetPlanRequest>, SetPlanRequestValidator>();
+        services.AddScoped<IValidator<AddCreditsRequest>, AddCreditsRequestValidator>();
 
         return services;
     }

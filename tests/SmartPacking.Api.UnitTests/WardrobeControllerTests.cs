@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using SmartPacking.Api.Contracts;
 using SmartPacking.Api.Controllers;
+using SmartPacking.Api.Validation;
 using SmartPacking.Application;
 using SmartPacking.Contracts;
 using SmartPacking.Domain;
@@ -17,7 +18,7 @@ public sealed class WardrobeControllerTests
     public async Task GetAsyncReturnsBadRequestWithoutAccessingTheStoreForInvalidPagination()
     {
         var store = Substitute.For<ISmartPackingStore>();
-        var controller = new WardrobeController(store);
+        var controller = CreateController(store);
 
         var result = await controller.GetAsync(page: 0);
 
@@ -37,7 +38,7 @@ public sealed class WardrobeControllerTests
         store.GetDefaultUserAsync(Arg.Any<CancellationToken>()).Returns(user);
         store.GetWardrobeCollectionAsync(user.Id, 2, 20, Arg.Any<CancellationToken>())
             .Returns(new WardrobeSnapshot([active], [retired], 2, 20));
-        var controller = new WardrobeController(store);
+        var controller = CreateController(store);
 
         var result = await controller.GetAsync(includeDeleted: true, page: 2, pageSize: 20);
 
@@ -53,7 +54,7 @@ public sealed class WardrobeControllerTests
     public async Task CreateAsyncRejectsAnInvalidGarmentBeforeAccessingTheStore()
     {
         var store = Substitute.For<ISmartPackingStore>();
-        var controller = new WardrobeController(store);
+        var controller = CreateController(store);
         var request = new UpsertClothingItemRequest("", ClothingType.TShirt, Season.AllYear, "Azul", 0, false, Style.Casual, 180, true, true, 70, [], null);
 
         var result = await controller.CreateAsync(request, CancellationToken.None);
@@ -71,7 +72,7 @@ public sealed class WardrobeControllerTests
         var garmentId = Guid.NewGuid();
         store.GetDefaultUserAsync(Arg.Any<CancellationToken>()).Returns(user);
         store.UpdateClothingStatusAsync(user.Id, garmentId, true, false, Arg.Any<CancellationToken>()).Returns(false);
-        var controller = new WardrobeController(store);
+        var controller = CreateController(store);
 
         var result = await controller.UpdateStatusAsync(garmentId, new UpdateClothingStatusRequest(true, false), CancellationToken.None);
 
@@ -80,4 +81,6 @@ public sealed class WardrobeControllerTests
     }
 
     private static ClothingItem Garment(string name, bool isDeleted) => new(Guid.NewGuid(), name, ClothingType.TShirt, Season.AllYear, "Azul", 2, false, Style.Casual, 180, true, true, 70, [], isDeleted, null, null);
+
+    private static WardrobeController CreateController(ISmartPackingStore store) => new(store, new UpsertClothingItemRequestValidator());
 }

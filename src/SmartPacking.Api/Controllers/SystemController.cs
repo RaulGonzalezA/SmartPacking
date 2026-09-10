@@ -8,7 +8,12 @@ namespace SmartPacking.Api.Controllers;
 
 [ApiController]
 [Route("api")]
-public sealed class SystemController(ISmartPackingStore store, IValidator<CompleteUserOnboardingRequest> onboardingValidator, IValidator<UpdateCurrentUserRequest> updateValidator) : ControllerBase
+public sealed class SystemController(
+    ISmartPackingStore store,
+    IPhotoStorage photoStorage,
+    IValidator<CompleteUserOnboardingRequest> onboardingValidator,
+    IValidator<UpdateCurrentUserRequest> updateValidator,
+    IValidator<DeleteCurrentUserRequest> deleteValidator) : ControllerBase
 {
     [HttpGet("me")]
     public async Task<IActionResult> GetCurrentUserAsync(CancellationToken cancellationToken) => Ok(await store.GetDefaultUserAsync(cancellationToken));
@@ -53,15 +58,22 @@ public sealed class SystemController(ISmartPackingStore store, IValidator<Comple
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DeleteCurrentUserAsync(DeleteCurrentUserRequest request, CancellationToken cancellationToken)
     {
-        if (!string.Equals(request.Confirmation, "ELIMINAR", StringComparison.Ordinal))
+        var validationProblem = await deleteValidator.ToProblemDetailsAsync(request, cancellationToken);
+        if (validationProblem is not null)
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]>
-            {
-                ["confirmation"] = ["Escribe ELIMINAR para confirmar el borrado de tus datos locales."]
-            }));
+            return BadRequest(validationProblem);
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
+        var photoIds = (await store.GetWardrobeAsync(user.Id, cancellationToken))
+            .Where(item => !string.IsNullOrWhiteSpace(item.PhotoUrl))
+            .Select(item => item.Id)
+            .ToArray();
+        foreach (var photoId in photoIds)
+        {
+            await photoStorage.DeleteAsync(photoId, cancellationToken);
+        }
+
         await store.DeleteUserDataAsync(user.Id, cancellationToken);
         return NoContent();
     }

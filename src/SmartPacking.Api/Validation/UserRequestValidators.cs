@@ -19,7 +19,13 @@ public sealed class SaveTripRequestValidator : AbstractValidator<SaveTripRequest
     {
         RuleFor(request => request.Destination).NotEmpty().MaximumLength(120);
         RuleFor(request => request.EndDate).GreaterThanOrEqualTo(request => request.StartDate);
+        RuleFor(request => request.MinimumTemperatureCelsius).InclusiveBetween(-80, 60);
+        RuleFor(request => request.MaximumTemperatureCelsius)
+            .InclusiveBetween(-80, 70)
+            .GreaterThanOrEqualTo(request => request.MinimumTemperatureCelsius);
+        RuleForEach(request => request.Activities).Must(activity => Enum.IsDefined((Style)activity));
         RuleFor(request => request.Origin).MaximumLength(160);
+        RuleFor(request => request.AirlineCode).MaximumLength(12);
         RuleFor(request => request.LuggageAllowanceGrams).GreaterThanOrEqualTo(0).When(request => request.LuggageAllowanceGrams.HasValue);
         RuleFor(request => request.LuggageHeightCentimetres).GreaterThan(0).When(request => request.LuggageHeightCentimetres.HasValue);
         RuleFor(request => request.LuggageWidthCentimetres).GreaterThan(0).When(request => request.LuggageWidthCentimetres.HasValue);
