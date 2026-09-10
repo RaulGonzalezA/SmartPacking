@@ -9,7 +9,7 @@ public sealed class TripDetailPage : ContentPage
     private readonly ISmartPackingClient client;
     private readonly Trip trip;
     private readonly VerticalStackLayout content;
-    private CancellationTokenSource? pageCancellation;
+    private readonly PageCancellation pageCancellation = new();
     private bool loading;
 
     public TripDetailPage(ISmartPackingClient client, Trip trip)
@@ -24,13 +24,13 @@ public sealed class TripDetailPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        ResetPageCancellation();
-        await LoadAsync(PageToken);
+        pageCancellation.Reset();
+        await LoadAsync(pageCancellation.Token);
     }
 
     protected override void OnDisappearing()
     {
-        pageCancellation?.Cancel();
+        pageCancellation.Release();
         base.OnDisappearing();
     }
 
@@ -62,6 +62,7 @@ public sealed class TripDetailPage : ContentPage
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            return;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
@@ -120,7 +121,7 @@ public sealed class TripDetailPage : ContentPage
                     return;
                 }
 
-                await SetChecklistAsync(item, args.Value, checkBox, PageToken);
+                await SetChecklistAsync(item, args.Value, checkBox, pageCancellation.Token);
             };
             content.Add(new HorizontalStackLayout { Spacing = 10, Children = { checkBox, label } });
         }
@@ -135,6 +136,7 @@ public sealed class TripDetailPage : ContentPage
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            return;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
@@ -145,14 +147,5 @@ public sealed class TripDetailPage : ContentPage
         {
             checkBox.IsEnabled = true;
         }
-    }
-
-    private CancellationToken PageToken => pageCancellation?.Token ?? CancellationToken.None;
-
-    private void ResetPageCancellation()
-    {
-        pageCancellation?.Cancel();
-        pageCancellation?.Dispose();
-        pageCancellation = new CancellationTokenSource();
     }
 }

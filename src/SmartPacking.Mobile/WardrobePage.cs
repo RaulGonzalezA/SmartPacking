@@ -10,7 +10,7 @@ public sealed class WardrobePage : ContentPage
     private readonly IServiceProvider services;
     private readonly CollectionView wardrobeView;
     private readonly Label statusLabel;
-    private CancellationTokenSource? pageCancellation;
+    private readonly PageCancellation pageCancellation = new();
     private bool loading;
 
     public WardrobePage(ISmartPackingClient client, IServiceProvider services)
@@ -76,20 +76,20 @@ public sealed class WardrobePage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        ResetPageCancellation();
-        await LoadAsync(PageToken);
+        pageCancellation.Reset();
+        await LoadAsync(pageCancellation.Token);
     }
 
     protected override void OnDisappearing()
     {
-        pageCancellation?.Cancel();
+        pageCancellation.Release();
         base.OnDisappearing();
     }
 
     private async void AddGarmentClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(services.GetRequiredService<AddGarmentPage>());
 
-    private async void RefreshClicked(object? sender, EventArgs e) => await LoadAsync(PageToken);
+    private async void RefreshClicked(object? sender, EventArgs e) => await LoadAsync(pageCancellation.Token);
 
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
@@ -114,6 +114,7 @@ public sealed class WardrobePage : ContentPage
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            return;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
@@ -214,14 +215,5 @@ public sealed class WardrobePage : ContentPage
         public string Description { get; }
         public string Status { get; }
         public ImageSource? Photo { get; }
-    }
-
-    private CancellationToken PageToken => pageCancellation?.Token ?? CancellationToken.None;
-
-    private void ResetPageCancellation()
-    {
-        pageCancellation?.Cancel();
-        pageCancellation?.Dispose();
-        pageCancellation = new CancellationTokenSource();
     }
 }

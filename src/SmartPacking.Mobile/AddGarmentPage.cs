@@ -25,8 +25,8 @@ public sealed class AddGarmentPage : ContentPage
     private readonly Switch waterproofSwitch;
     private readonly Button analyzeButton;
     private readonly Button saveButton;
+    private readonly PageCancellation pageCancellation = new();
     private PreparedPhoto? photo;
-    private CancellationTokenSource? pageCancellation;
     private Guid? createdClothingItemId;
     private bool busy;
 
@@ -112,12 +112,12 @@ public sealed class AddGarmentPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        ResetPageCancellation();
+        pageCancellation.Reset();
     }
 
     protected override void OnDisappearing()
     {
-        pageCancellation?.Cancel();
+        pageCancellation.Release();
         base.OnDisappearing();
     }
 
@@ -180,7 +180,7 @@ public sealed class AddGarmentPage : ContentPage
             return;
         }
 
-        var cancellationToken = PageToken;
+        var cancellationToken = pageCancellation.Token;
         try
         {
             SetBusy(true, "Gemini está analizando la prenda...");
@@ -191,6 +191,7 @@ public sealed class AddGarmentPage : ContentPage
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            return;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
@@ -216,7 +217,7 @@ public sealed class AddGarmentPage : ContentPage
             return;
         }
 
-        var cancellationToken = PageToken;
+        var cancellationToken = pageCancellation.Token;
         try
         {
             SetBusy(true, createdClothingItemId is null ? "Guardando prenda..." : "Reintentando fotografía...");
@@ -239,6 +240,7 @@ public sealed class AddGarmentPage : ContentPage
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            return;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
@@ -382,14 +384,5 @@ public sealed class AddGarmentPage : ContentPage
             .DefaultIfEmpty(0)
             .First();
         picker.SelectedIndex = index;
-    }
-
-    private CancellationToken PageToken => pageCancellation?.Token ?? CancellationToken.None;
-
-    private void ResetPageCancellation()
-    {
-        pageCancellation?.Cancel();
-        pageCancellation?.Dispose();
-        pageCancellation = new CancellationTokenSource();
     }
 }
