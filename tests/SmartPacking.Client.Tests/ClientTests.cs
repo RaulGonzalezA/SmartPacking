@@ -8,7 +8,7 @@ namespace SmartPacking.Client.Tests;
 public sealed class BearerTokenHandlerTests
 {
     [Fact]
-    public async Task SendAsync_WithAccessToken_AddsBearerHeader()
+    public async Task SendAsyncWithAccessTokenAddsBearerHeader()
     {
         var tokenProvider = new StubTokenProvider("access-1", null);
         using var terminal = new SequenceHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
@@ -23,7 +23,7 @@ public sealed class BearerTokenHandlerTests
     }
 
     [Fact]
-    public async Task SendAsync_WhenUnauthorized_RefreshesAndRetriesOnce()
+    public async Task SendAsyncWhenUnauthorizedRefreshesAndRetriesOnce()
     {
         var tokenProvider = new StubTokenProvider("access-1", "access-2");
         using var terminal = new SequenceHandler(call => new HttpResponseMessage(
@@ -78,7 +78,7 @@ public sealed class BearerTokenHandlerTests
 public sealed class SmartPackingClientTests
 {
     [Fact]
-    public async Task GetWardrobePageAsync_UsesRequestedPagination()
+    public async Task GetWardrobePageAsyncUsesRequestedPagination()
     {
         string? requestedPath = null;
         using var handler = new CallbackHandler((request, _) =>
@@ -99,7 +99,7 @@ public sealed class SmartPackingClientTests
     }
 
     [Fact]
-    public async Task GetClothingThumbnailAsync_WhenMissing_ReturnsNull()
+    public async Task GetClothingThumbnailAsyncWhenMissingReturnsNull()
     {
         using var handler = new CallbackHandler((_, _) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
@@ -112,12 +112,12 @@ public sealed class SmartPackingClientTests
     }
 
     [Fact]
-    public async Task UploadClothingPhotoAsync_WithThumbnail_SendsBothParts()
+    public async Task UploadClothingPhotoAsyncWithThumbnailSendsBothParts()
     {
         string? multipartBody = null;
         using var handler = new CallbackHandler(async (request, cancellationToken) =>
         {
-            var bytes = await request.Content!.ReadAsByteArrayAsync(cancellationToken);
+            var bytes = await request.Content.ReadAsByteArrayAsync(cancellationToken);
             multipartBody = Encoding.Latin1.GetString(bytes);
             return new HttpResponseMessage(HttpStatusCode.OK);
         });

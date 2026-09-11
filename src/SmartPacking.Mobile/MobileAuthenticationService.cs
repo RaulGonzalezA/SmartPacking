@@ -96,17 +96,14 @@ public sealed class SecureAccessTokenProvider(MobileOptions options) : IAccessTo
         }
     }
 
-    public async Task SaveAsync(
+    public static async Task SaveAsync(
         string accessToken,
         string refreshToken,
         int expiresInSeconds,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (expiresInSeconds <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(expiresInSeconds));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(expiresInSeconds);
 
         await SecureStorage.Default.SetAsync(AccessTokenKey, accessToken);
         await SecureStorage.Default.SetAsync(RefreshTokenKey, refreshToken);
@@ -116,7 +113,7 @@ public sealed class SecureAccessTokenProvider(MobileOptions options) : IAccessTo
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    public void Clear()
+    public static void Clear()
     {
         SecureStorage.Default.Remove(AccessTokenKey);
         SecureStorage.Default.Remove(RefreshTokenKey);
@@ -211,12 +208,12 @@ public sealed class MobileAuthenticationService(MobileOptions options, SecureAcc
             throw new InvalidOperationException("Auth0 no devolvió refresh_token. Habilita Offline Access y Refresh Token Rotation para la aplicación Native.");
         }
 
-        await accessTokenProvider.SaveAsync(token.AccessToken, token.RefreshToken, token.ExpiresIn, cancellationToken);
+        await SecureAccessTokenProvider.SaveAsync(token.AccessToken, token.RefreshToken, token.ExpiresIn, cancellationToken);
     }
 
     public Task LogoutAsync()
     {
-        accessTokenProvider.Clear();
+        SecureAccessTokenProvider.Clear();
         return Task.CompletedTask;
     }
 

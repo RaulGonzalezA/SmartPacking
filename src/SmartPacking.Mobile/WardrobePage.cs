@@ -106,7 +106,7 @@ public sealed class WardrobePage : ContentPage
 
     private async void WardrobeSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (e.CurrentSelection.FirstOrDefault() is not WardrobeItemViewModel selected)
+        if (e.CurrentSelection.Count == 0 || e.CurrentSelection[0] is not WardrobeItemViewModel selected)
         {
             return;
         }

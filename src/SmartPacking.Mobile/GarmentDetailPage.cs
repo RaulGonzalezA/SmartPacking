@@ -218,13 +218,14 @@ public sealed class GarmentDetailPage : ContentPage
 
     private async void SaveClicked(object? sender, EventArgs e)
     {
-        if (busy || !TryBuildRequest(out var request, out var validationMessage))
+        if (busy)
         {
-            if (!busy)
-            {
-                statusLabel.Text = validationMessage;
-            }
+            return;
+        }
 
+        if (!TryBuildRequest(out var request, out var validationMessage))
+        {
+            statusLabel.Text = validationMessage;
             return;
         }
 
