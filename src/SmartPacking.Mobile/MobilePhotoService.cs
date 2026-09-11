@@ -19,6 +19,8 @@ public sealed class MobilePhotoService : IMobilePhotoService
 {
     private const int MaxDimension = 1280;
     private const int ThumbnailDimension = 320;
+    private const int MaxSourceBytes = 25 * 1024 * 1024;
+    private const int CopyBufferSize = 81920;
     private const int JpegQuality = 82;
     private const int ThumbnailJpegQuality = 76;
 
@@ -44,8 +46,13 @@ public sealed class MobilePhotoService : IMobilePhotoService
     private static async Task<PreparedPhoto> PrepareAsync(FileResult file, CancellationToken cancellationToken)
     {
         await using var source = await file.OpenReadAsync();
+        if (source.CanSeek && source.Length > MaxSourceBytes)
+        {
+            throw new InvalidOperationException("La imagen seleccionada es demasiado grande. El límite es 25 MB.");
+        }
+
         using var input = new MemoryStream();
-        await source.CopyToAsync(input, cancellationToken);
+        await CopyToBufferAsync(source, input, cancellationToken);
         if (!input.TryGetBuffer(out var sourceBuffer) || sourceBuffer.Array is null)
         {
             throw new InvalidOperationException("No se ha podido preparar la imagen seleccionada.");
@@ -56,8 +63,29 @@ public sealed class MobilePhotoService : IMobilePhotoService
             cancellationToken);
     }
 
+    private static async Task CopyToBufferAsync(Stream source, MemoryStream destination, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[CopyBufferSize];
+        while (true)
+        {
+            var read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+            if (read == 0)
+            {
+                return;
+            }
+
+            if (destination.Length + read > MaxSourceBytes)
+            {
+                throw new InvalidOperationException("La imagen seleccionada es demasiado grande. El límite es 25 MB.");
+            }
+
+            await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+        }
+    }
+
     private static PreparedPhoto Optimize(byte[] sourceBytes, int offset, int length)
     {
+        var orientation = JpegExifOrientationReader.Read(sourceBytes.AsSpan(offset, length));
         using var boundsOptions = new BitmapFactory.Options { InJustDecodeBounds = true };
         _ = BitmapFactory.DecodeByteArray(sourceBytes, offset, length, boundsOptions);
         if (boundsOptions.OutWidth <= 0 || boundsOptions.OutHeight <= 0)
@@ -72,17 +100,24 @@ public sealed class MobilePhotoService : IMobilePhotoService
         using var bitmap = BitmapFactory.DecodeByteArray(sourceBytes, offset, length, decodeOptions)
             ?? throw new InvalidOperationException("No se ha podido leer la imagen seleccionada.");
 
+        Bitmap? oriented = null;
         Bitmap? resized = null;
         try
         {
             var outputBitmap = bitmap;
-            var largestDimension = Math.Max(bitmap.Width, bitmap.Height);
+            if (orientation != 1)
+            {
+                oriented = ApplyOrientation(bitmap, orientation);
+                outputBitmap = oriented;
+            }
+
+            var largestDimension = Math.Max(outputBitmap.Width, outputBitmap.Height);
             if (largestDimension > MaxDimension)
             {
                 var scale = MaxDimension / (double)largestDimension;
-                var width = Math.Max(1, (int)Math.Round(bitmap.Width * scale));
-                var height = Math.Max(1, (int)Math.Round(bitmap.Height * scale));
-                resized = Bitmap.CreateScaledBitmap(bitmap, width, height, true);
+                var width = Math.Max(1, (int)Math.Round(outputBitmap.Width * scale));
+                var height = Math.Max(1, (int)Math.Round(outputBitmap.Height * scale));
+                resized = Bitmap.CreateScaledBitmap(outputBitmap, width, height, true);
                 outputBitmap = resized;
             }
 
@@ -96,7 +131,44 @@ public sealed class MobilePhotoService : IMobilePhotoService
         finally
         {
             resized?.Dispose();
+            oriented?.Dispose();
         }
+    }
+
+    private static Bitmap ApplyOrientation(Bitmap bitmap, int orientation)
+    {
+        using var matrix = new Matrix();
+        switch (orientation)
+        {
+            case 2:
+                matrix.SetScale(-1, 1);
+                break;
+            case 3:
+                matrix.SetRotate(180);
+                break;
+            case 4:
+                matrix.SetScale(1, -1);
+                break;
+            case 5:
+                matrix.SetRotate(90);
+                _ = matrix.PostScale(-1, 1);
+                break;
+            case 6:
+                matrix.SetRotate(90);
+                break;
+            case 7:
+                matrix.SetRotate(-90);
+                _ = matrix.PostScale(-1, 1);
+                break;
+            case 8:
+                matrix.SetRotate(-90);
+                break;
+            default:
+                throw new InvalidOperationException("La orientación EXIF de la fotografía no es válida.");
+        }
+
+        return Bitmap.CreateBitmap(bitmap, 0, 0, bitmap.Width, bitmap.Height, matrix, true)
+            ?? throw new InvalidOperationException("No se ha podido aplicar la orientación de la fotografía.");
     }
 
     private static byte[] CreateThumbnail(Bitmap bitmap)

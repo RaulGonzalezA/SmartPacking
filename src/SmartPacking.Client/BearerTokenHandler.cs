@@ -3,7 +3,9 @@ using System.Net.Http.Headers;
 
 namespace SmartPacking.Client;
 
-public sealed class BearerTokenHandler(IAccessTokenProvider tokenProvider) : DelegatingHandler
+public sealed class BearerTokenHandler(
+    IAccessTokenProvider tokenProvider,
+    IAuthenticationRequiredHandler? authenticationRequiredHandler = null) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -11,8 +13,14 @@ public sealed class BearerTokenHandler(IAccessTokenProvider tokenProvider) : Del
         SetAuthorization(request, accessToken);
 
         var response = await base.SendAsync(request, cancellationToken);
-        if (response.StatusCode != HttpStatusCode.Unauthorized || string.IsNullOrWhiteSpace(accessToken))
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
         {
+            return response;
+        }
+
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            await NotifyAuthenticationRequiredAsync(cancellationToken);
             return response;
         }
 
@@ -20,6 +28,7 @@ public sealed class BearerTokenHandler(IAccessTokenProvider tokenProvider) : Del
         if (string.IsNullOrWhiteSpace(refreshedAccessToken) ||
             string.Equals(refreshedAccessToken, accessToken, StringComparison.Ordinal))
         {
+            await NotifyAuthenticationRequiredAsync(cancellationToken);
             return response;
         }
 
@@ -27,6 +36,14 @@ public sealed class BearerTokenHandler(IAccessTokenProvider tokenProvider) : Del
         SetAuthorization(retryRequest, refreshedAccessToken);
         response.Dispose();
         return await base.SendAsync(retryRequest, cancellationToken);
+    }
+
+    private async Task NotifyAuthenticationRequiredAsync(CancellationToken cancellationToken)
+    {
+        if (authenticationRequiredHandler is not null)
+        {
+            await authenticationRequiredHandler.HandleAsync(cancellationToken);
+        }
     }
 
     private static void SetAuthorization(HttpRequestMessage request, string? accessToken) =>

@@ -16,10 +16,13 @@ public static class MauiProgram
         builder.Services.AddSingleton<SecureAccessTokenProvider>();
         builder.Services.AddSingleton<IAccessTokenProvider>(provider => provider.GetRequiredService<SecureAccessTokenProvider>());
         builder.Services.AddSingleton<IMobileAuthenticationService, MobileAuthenticationService>();
+        builder.Services.AddSingleton<IAuthenticationRequiredHandler, MobileAuthenticationRequiredHandler>();
         builder.Services.AddSingleton<IMobilePhotoService, MobilePhotoService>();
         builder.Services.AddSingleton<ISmartPackingClient>(provider =>
         {
-            var bearer = new BearerTokenHandler(provider.GetRequiredService<IAccessTokenProvider>())
+            var bearer = new BearerTokenHandler(
+                provider.GetRequiredService<IAccessTokenProvider>(),
+                provider.GetRequiredService<IAuthenticationRequiredHandler>())
             {
                 InnerHandler = new HttpClientHandler()
             };

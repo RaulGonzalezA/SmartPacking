@@ -39,6 +39,40 @@ public sealed class BearerTokenHandlerTests
         tokenProvider.RejectedAccessToken.Should().Be("access-1");
     }
 
+    [Fact]
+    public async Task SendAsyncWhenRefreshUnavailableNotifiesAuthenticationRequiredWithoutRetry()
+    {
+        var tokenProvider = new StubTokenProvider("access-1", null);
+        var authenticationRequired = new RecordingAuthenticationRequiredHandler();
+        using var terminal = new SequenceHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        using var bearer = new BearerTokenHandler(tokenProvider, authenticationRequired) { InnerHandler = terminal };
+        using var client = new HttpClient(bearer);
+
+        using var response = await client.GetAsync("https://smartpacking.test/api/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        terminal.AuthorizationValues.Should().Equal("Bearer access-1");
+        tokenProvider.RefreshCalls.Should().Be(1);
+        authenticationRequired.Calls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SendAsyncWhenNoStoredTokenGetsUnauthorizedNotifiesAuthenticationRequired()
+    {
+        var tokenProvider = new StubTokenProvider(null, null);
+        var authenticationRequired = new RecordingAuthenticationRequiredHandler();
+        using var terminal = new SequenceHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        using var bearer = new BearerTokenHandler(tokenProvider, authenticationRequired) { InnerHandler = terminal };
+        using var client = new HttpClient(bearer);
+
+        using var response = await client.GetAsync("https://smartpacking.test/api/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        terminal.AuthorizationValues.Should().ContainSingle().Which.Should().BeNull();
+        tokenProvider.RefreshCalls.Should().Be(0);
+        authenticationRequired.Calls.Should().Be(1);
+    }
+
     private sealed class StubTokenProvider(string? accessToken, string? refreshedAccessToken) : IAccessTokenProvider
     {
         public int RefreshCalls { get; private set; }
@@ -56,6 +90,18 @@ public sealed class BearerTokenHandlerTests
             RefreshCalls++;
             RejectedAccessToken = rejectedAccessToken;
             return ValueTask.FromResult(refreshedAccessToken);
+        }
+    }
+
+    private sealed class RecordingAuthenticationRequiredHandler : IAuthenticationRequiredHandler
+    {
+        public int Calls { get; private set; }
+
+        public Task HandleAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Calls++;
+            return Task.CompletedTask;
         }
     }
 
