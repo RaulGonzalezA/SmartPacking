@@ -7,8 +7,16 @@ namespace SmartPacking.Api.Controllers;
 
 [ApiController]
 [Route("api/wardrobe")]
-public sealed class WardrobePhotosController(ISmartPackingStore store, IPhotoStorage photoStorage) : ControllerBase
+public sealed class WardrobePhotosController(
+    ISmartPackingStore store,
+    IClothingItemLookup clothingItemLookup,
+    IPhotoStorage photoStorage) : ControllerBase
 {
+    private const long MaximumPhotoBytes = 5 * 1024 * 1024;
+    private const long MaximumPhotoPixels = 30_000_000;
+    private const long MaximumThumbnailBytes = 1024 * 1024;
+    private const long MaximumThumbnailPixels = 4_000_000;
+
     [HttpGet("{clothingItemId:guid}/photo")]
     [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -33,18 +41,19 @@ public sealed class WardrobePhotosController(ISmartPackingStore store, IPhotoSto
         [FromForm] IFormFile? thumbnail,
         CancellationToken cancellationToken)
     {
-        if (!IsValidJpeg(photo, 5 * 1024 * 1024))
+        if (!await JpegImageValidator.IsValidAsync(photo, MaximumPhotoBytes, MaximumPhotoPixels, cancellationToken))
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["photo"] = ["Selecciona una foto JPEG de hasta 5 MB."] }));
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["photo"] = ["Selecciona una foto JPEG válida de hasta 5 MB."] }));
         }
 
-        if (thumbnail is not null && !IsValidJpeg(thumbnail, 1024 * 1024))
+        if (thumbnail is not null &&
+            !await JpegImageValidator.IsValidAsync(thumbnail, MaximumThumbnailBytes, MaximumThumbnailPixels, cancellationToken))
         {
-            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["thumbnail"] = ["La miniatura debe ser JPEG y ocupar como máximo 1 MB."] }));
+            return BadRequest(new ValidationProblemDetails(new Dictionary<string, string[]> { ["thumbnail"] = ["La miniatura debe ser un JPEG válido y ocupar como máximo 1 MB."] }));
         }
 
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var clothingItem = (await store.GetWardrobeAsync(user.Id, cancellationToken)).SingleOrDefault(item => item.Id == clothingItemId);
+        var clothingItem = await clothingItemLookup.GetAsync(user.Id, clothingItemId, cancellationToken);
         if (clothingItem is null)
         {
             return Problem(statusCode: StatusCodes.Status404NotFound, title: "Prenda no encontrada");
@@ -52,25 +61,26 @@ public sealed class WardrobePhotosController(ISmartPackingStore store, IPhotoSto
 
         await using var photoStream = photo.OpenReadStream();
         var imageUrl = await photoStorage.SaveJpegAsync(clothingItemId, photoStream, cancellationToken);
-
-        if (thumbnail is null)
+        var updated = await store.UpdateClothingItemAsync(user.Id, clothingItem with { PhotoUrl = imageUrl }, cancellationToken);
+        if (updated is null)
         {
-            await photoStorage.DeleteThumbnailAsync(clothingItemId, cancellationToken);
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Prenda no encontrada");
         }
-        else
+
+        await photoStorage.DeleteThumbnailAsync(clothingItemId, cancellationToken);
+        if (thumbnail is not null)
         {
             await using var thumbnailStream = thumbnail.OpenReadStream();
             await photoStorage.SaveThumbnailJpegAsync(clothingItemId, thumbnailStream, cancellationToken);
         }
 
-        await store.UpdateClothingItemAsync(user.Id, clothingItem with { PhotoUrl = imageUrl }, cancellationToken);
         return Ok(new ApiResult<PhotoUploadResponse>(new PhotoUploadResponse(imageUrl)));
     }
 
     private async Task<IActionResult> GetPhotoAsync(Guid clothingItemId, bool thumbnail, CancellationToken cancellationToken)
     {
         var user = await store.GetDefaultUserAsync(cancellationToken);
-        var clothingItem = (await store.GetWardrobeAsync(user.Id, cancellationToken)).SingleOrDefault(item => item.Id == clothingItemId);
+        var clothingItem = await clothingItemLookup.GetAsync(user.Id, clothingItemId, cancellationToken);
         if (clothingItem is null || string.IsNullOrWhiteSpace(clothingItem.PhotoUrl))
         {
             return Problem(statusCode: StatusCodes.Status404NotFound, title: "Foto no encontrada");
@@ -88,14 +98,9 @@ public sealed class WardrobePhotosController(ISmartPackingStore store, IPhotoSto
             return Problem(statusCode: StatusCodes.Status404NotFound, title: "Foto no encontrada");
         }
 
-        Response.Headers.CacheControl = "private, max-age=86400";
+        Response.Headers.CacheControl = "private, no-cache";
         return File(photo, "image/jpeg");
     }
-
-    private static bool IsValidJpeg(IFormFile file, long maximumBytes) =>
-        file.Length > 0 &&
-        file.Length <= maximumBytes &&
-        string.Equals(file.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase);
 
     public sealed record PhotoUploadResponse(string ImageUrl);
 }
