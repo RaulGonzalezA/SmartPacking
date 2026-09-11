@@ -21,7 +21,10 @@ public sealed class MobileAuthenticationRequiredHandler(IServiceProvider service
         {
             await MainThread.InvokeOnMainThreadAsync(async () =>
             {
-                var window = Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault();
+                var application = Microsoft.Maui.Controls.Application.Current;
+                var window = application is null || application.Windows.Count == 0
+                    ? null
+                    : application.Windows[0];
                 if (window?.Page is not NavigationPage navigation || navigation.CurrentPage is LoginPage)
                 {
                     return;
