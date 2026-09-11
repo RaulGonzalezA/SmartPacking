@@ -2,9 +2,10 @@ using Android.Graphics;
 
 namespace SmartPacking.Mobile;
 
-public sealed record PreparedPhoto(byte[] Content, string FileName, int Width, int Height)
+public sealed record PreparedPhoto(byte[] Content, byte[] ThumbnailContent, string FileName, int Width, int Height)
 {
     public int SizeKilobytes => (int)Math.Ceiling(Content.Length / 1024d);
+    public int ThumbnailSizeKilobytes => (int)Math.Ceiling(ThumbnailContent.Length / 1024d);
 }
 
 public interface IMobilePhotoService
@@ -17,7 +18,9 @@ public interface IMobilePhotoService
 public sealed class MobilePhotoService : IMobilePhotoService
 {
     private const int MaxDimension = 1280;
+    private const int ThumbnailDimension = 320;
     private const int JpegQuality = 82;
+    private const int ThumbnailJpegQuality = 76;
 
     public bool CanCapturePhoto => MediaPicker.Default.IsCaptureSupported;
 
@@ -83,16 +86,9 @@ public sealed class MobilePhotoService : IMobilePhotoService
                 outputBitmap = resized;
             }
 
-            var jpegFormat = Bitmap.CompressFormat.Jpeg
-                ?? throw new InvalidOperationException("El dispositivo no dispone del formato JPEG requerido.");
-            using var output = new MemoryStream();
-            if (!outputBitmap.Compress(jpegFormat, JpegQuality, output))
-            {
-                throw new InvalidOperationException("No se ha podido optimizar la fotografía.");
-            }
-
             return new PreparedPhoto(
-                output.ToArray(),
+                Compress(outputBitmap, JpegQuality),
+                CreateThumbnail(outputBitmap),
                 $"garment-{Guid.NewGuid():N}.jpg",
                 outputBitmap.Width,
                 outputBitmap.Height);
@@ -101,6 +97,43 @@ public sealed class MobilePhotoService : IMobilePhotoService
         {
             resized?.Dispose();
         }
+    }
+
+    private static byte[] CreateThumbnail(Bitmap bitmap)
+    {
+        Bitmap? thumbnail = null;
+        try
+        {
+            var outputBitmap = bitmap;
+            var largestDimension = Math.Max(bitmap.Width, bitmap.Height);
+            if (largestDimension > ThumbnailDimension)
+            {
+                var scale = ThumbnailDimension / (double)largestDimension;
+                var width = Math.Max(1, (int)Math.Round(bitmap.Width * scale));
+                var height = Math.Max(1, (int)Math.Round(bitmap.Height * scale));
+                thumbnail = Bitmap.CreateScaledBitmap(bitmap, width, height, true);
+                outputBitmap = thumbnail;
+            }
+
+            return Compress(outputBitmap, ThumbnailJpegQuality);
+        }
+        finally
+        {
+            thumbnail?.Dispose();
+        }
+    }
+
+    private static byte[] Compress(Bitmap bitmap, int quality)
+    {
+        var jpegFormat = Bitmap.CompressFormat.Jpeg
+            ?? throw new InvalidOperationException("El dispositivo no dispone del formato JPEG requerido.");
+        using var output = new MemoryStream();
+        if (!bitmap.Compress(jpegFormat, quality, output))
+        {
+            throw new InvalidOperationException("No se ha podido optimizar la fotografía.");
+        }
+
+        return output.ToArray();
     }
 
     private static int CalculateInSampleSize(int width, int height)

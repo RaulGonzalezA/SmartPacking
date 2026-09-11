@@ -9,8 +9,8 @@
     <Nullable>enable</Nullable>
     <ApplicationTitle>SmartPacking</ApplicationTitle>
     <ApplicationId>app.smartpacking.mobile</ApplicationId>
-    <ApplicationDisplayVersion>0.2.0</ApplicationDisplayVersion>
-    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationDisplayVersion>0.3.0</ApplicationDisplayVersion>
+    <ApplicationVersion>3</ApplicationVersion>
     <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
   </PropertyGroup>
   <ItemGroup>

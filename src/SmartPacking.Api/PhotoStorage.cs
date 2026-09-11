@@ -1,6 +1,6 @@
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using Azure;
 using SmartPacking.Application;
 
 namespace SmartPacking.Api;
@@ -9,29 +9,62 @@ public sealed class LocalPhotoStorage(IWebHostEnvironment environment) : IPhotoS
 {
     public async Task<string> SaveJpegAsync(Guid clothingItemId, Stream content, CancellationToken cancellationToken)
     {
-        var directory = Path.Combine(environment.WebRootPath, "uploads");
-        Directory.CreateDirectory(directory);
-        await using var output = File.Create(Path.Combine(directory, $"{clothingItemId}.jpg"));
-        await content.CopyToAsync(output, cancellationToken);
+        await SaveAsync(GetPhotoPath(clothingItemId), content, cancellationToken);
         return $"/api/wardrobe/{clothingItemId}/photo";
     }
 
-    public Task<Stream?> OpenReadAsync(Guid clothingItemId, CancellationToken cancellationToken)
+    public Task SaveThumbnailJpegAsync(Guid clothingItemId, Stream content, CancellationToken cancellationToken) =>
+        SaveAsync(GetThumbnailPath(clothingItemId), content, cancellationToken);
+
+    public Task<Stream?> OpenReadAsync(Guid clothingItemId, CancellationToken cancellationToken) =>
+        OpenAsync(GetPhotoPath(clothingItemId), cancellationToken);
+
+    public Task<Stream?> OpenThumbnailReadAsync(Guid clothingItemId, CancellationToken cancellationToken) =>
+        OpenAsync(GetThumbnailPath(clothingItemId), cancellationToken);
+
+    public Task DeleteThumbnailAsync(Guid clothingItemId, CancellationToken cancellationToken)
     {
-        var path = Path.Combine(environment.WebRootPath, "uploads", $"{clothingItemId}.jpg");
-        Stream? result = File.Exists(path) ? File.OpenRead(path) : null;
-        return Task.FromResult(result);
+        cancellationToken.ThrowIfCancellationRequested();
+        DeleteIfExists(GetThumbnailPath(clothingItemId));
+        return Task.CompletedTask;
     }
 
     public Task DeleteAsync(Guid clothingItemId, CancellationToken cancellationToken)
     {
-        var path = Path.Combine(environment.WebRootPath, "uploads", $"{clothingItemId}.jpg");
+        cancellationToken.ThrowIfCancellationRequested();
+        DeleteIfExists(GetPhotoPath(clothingItemId));
+        DeleteIfExists(GetThumbnailPath(clothingItemId));
+        return Task.CompletedTask;
+    }
+
+    private string GetPhotoPath(Guid clothingItemId) =>
+        Path.Combine(environment.WebRootPath, "uploads", $"{clothingItemId}.jpg");
+
+    private string GetThumbnailPath(Guid clothingItemId) =>
+        Path.Combine(environment.WebRootPath, "uploads", $"{clothingItemId}.thumb.jpg");
+
+    private static async Task SaveAsync(string path, Stream content, CancellationToken cancellationToken)
+    {
+        var directory = Path.GetDirectoryName(path)
+            ?? throw new InvalidOperationException("No se pudo resolver el directorio de fotografías.");
+        Directory.CreateDirectory(directory);
+        await using var output = File.Create(path);
+        await content.CopyToAsync(output, cancellationToken);
+    }
+
+    private static Task<Stream?> OpenAsync(string path, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Stream? result = File.Exists(path) ? File.OpenRead(path) : null;
+        return Task.FromResult(result);
+    }
+
+    private static void DeleteIfExists(string path)
+    {
         if (File.Exists(path))
         {
             File.Delete(path);
         }
-
-        return Task.CompletedTask;
     }
 }
 
@@ -41,21 +74,56 @@ public sealed class BlobPhotoStorage(BlobServiceClient blobServiceClient, IConfi
 
     public async Task<string> SaveJpegAsync(Guid clothingItemId, Stream content, CancellationToken cancellationToken)
     {
-        var container = blobServiceClient.GetBlobContainerClient(containerName);
-        await container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
-        await container.SetAccessPolicyAsync(PublicAccessType.None, cancellationToken: cancellationToken);
-        var blob = container.GetBlobClient($"{clothingItemId}.jpg");
-        await blob.UploadAsync(content, new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "image/jpeg" } }, cancellationToken);
+        await UploadAsync(GetPhotoBlobName(clothingItemId), content, cancellationToken);
         return $"/api/wardrobe/{clothingItemId}/photo";
     }
 
-    public async Task<Stream?> OpenReadAsync(Guid clothingItemId, CancellationToken cancellationToken)
+    public Task SaveThumbnailJpegAsync(Guid clothingItemId, Stream content, CancellationToken cancellationToken) =>
+        UploadAsync(GetThumbnailBlobName(clothingItemId), content, cancellationToken);
+
+    public Task<Stream?> OpenReadAsync(Guid clothingItemId, CancellationToken cancellationToken) =>
+        OpenAsync(GetPhotoBlobName(clothingItemId), cancellationToken);
+
+    public Task<Stream?> OpenThumbnailReadAsync(Guid clothingItemId, CancellationToken cancellationToken) =>
+        OpenAsync(GetThumbnailBlobName(clothingItemId), cancellationToken);
+
+    public async Task DeleteThumbnailAsync(Guid clothingItemId, CancellationToken cancellationToken)
+    {
+        await GetContainer()
+            .GetBlobClient(GetThumbnailBlobName(clothingItemId))
+            .DeleteIfExistsAsync(cancellationToken: cancellationToken);
+    }
+
+    public async Task DeleteAsync(Guid clothingItemId, CancellationToken cancellationToken)
+    {
+        var container = GetContainer();
+        await container.GetBlobClient(GetPhotoBlobName(clothingItemId)).DeleteIfExistsAsync(cancellationToken: cancellationToken);
+        await container.GetBlobClient(GetThumbnailBlobName(clothingItemId)).DeleteIfExistsAsync(cancellationToken: cancellationToken);
+    }
+
+    private BlobContainerClient GetContainer() => blobServiceClient.GetBlobContainerClient(containerName);
+
+    private static string GetPhotoBlobName(Guid clothingItemId) => $"{clothingItemId}.jpg";
+
+    private static string GetThumbnailBlobName(Guid clothingItemId) => $"{clothingItemId}.thumb.jpg";
+
+    private async Task UploadAsync(string blobName, Stream content, CancellationToken cancellationToken)
+    {
+        var container = GetContainer();
+        await container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+        await container.SetAccessPolicyAsync(PublicAccessType.None, cancellationToken: cancellationToken);
+        await container.GetBlobClient(blobName).UploadAsync(
+            content,
+            new BlobUploadOptions { HttpHeaders = new BlobHttpHeaders { ContentType = "image/jpeg" } },
+            cancellationToken);
+    }
+
+    private async Task<Stream?> OpenAsync(string blobName, CancellationToken cancellationToken)
     {
         try
         {
-            var response = await blobServiceClient
-                .GetBlobContainerClient(containerName)
-                .GetBlobClient($"{clothingItemId}.jpg")
+            var response = await GetContainer()
+                .GetBlobClient(blobName)
                 .DownloadStreamingAsync(cancellationToken: cancellationToken);
             return response.Value.Content;
         }
@@ -63,13 +131,5 @@ public sealed class BlobPhotoStorage(BlobServiceClient blobServiceClient, IConfi
         {
             return null;
         }
-    }
-
-    public async Task DeleteAsync(Guid clothingItemId, CancellationToken cancellationToken)
-    {
-        await blobServiceClient
-            .GetBlobContainerClient(containerName)
-            .GetBlobClient($"{clothingItemId}.jpg")
-            .DeleteIfExistsAsync(cancellationToken: cancellationToken);
     }
 }

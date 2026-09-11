@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using SmartPacking.Client;
 
 namespace SmartPacking.Mobile;
@@ -13,40 +15,136 @@ public interface IMobileAuthenticationService
     Task LogoutAsync();
 }
 
-public sealed class SecureAccessTokenProvider : IAccessTokenProvider
+public sealed class SecureAccessTokenProvider(MobileOptions options) : IAccessTokenProvider, IDisposable
 {
     private const string AccessTokenKey = "smartpacking.access_token";
+    private const string RefreshTokenKey = "smartpacking.refresh_token";
     private const string ExpiresAtKey = "smartpacking.access_token_expires_at";
+    private readonly SemaphoreSlim refreshGate = new(1, 1);
 
     public async ValueTask<string?> GetAccessTokenAsync(CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var expiresAtText = await SecureStorage.Default.GetAsync(ExpiresAtKey);
-        if (!DateTimeOffset.TryParseExact(expiresAtText, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var expiresAt)
-            || expiresAt <= DateTimeOffset.UtcNow.AddSeconds(30))
+        var stored = await ReadAccessTokenAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(stored.AccessToken) &&
+            stored.ExpiresAt > DateTimeOffset.UtcNow.AddSeconds(30))
         {
-            return null;
+            return stored.AccessToken;
         }
 
-        return await SecureStorage.Default.GetAsync(AccessTokenKey);
+        return await RefreshAccessTokenAsync(stored.AccessToken, cancellationToken);
     }
 
-    public static async Task SaveAsync(string accessToken, int expiresInSeconds)
+    public async ValueTask<string?> RefreshAccessTokenAsync(string? rejectedAccessToken, CancellationToken cancellationToken)
     {
+        await refreshGate.WaitAsync(cancellationToken);
+        try
+        {
+            var current = await ReadAccessTokenAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(current.AccessToken) &&
+                !string.Equals(current.AccessToken, rejectedAccessToken, StringComparison.Ordinal) &&
+                current.ExpiresAt > DateTimeOffset.UtcNow.AddSeconds(30))
+            {
+                return current.AccessToken;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var refreshToken = await SecureStorage.Default.GetAsync(RefreshTokenKey);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                Clear();
+                return null;
+            }
+
+            options.Validate();
+            using var httpClient = new HttpClient();
+            using var response = await httpClient.PostAsync(
+                $"{options.Auth0Authority.TrimEnd('/')}/oauth/token",
+                new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["grant_type"] = "refresh_token",
+                    ["client_id"] = options.Auth0ClientId,
+                    ["refresh_token"] = refreshToken
+                }),
+                cancellationToken);
+
+            if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized)
+            {
+                Clear();
+                return null;
+            }
+
+            response.EnsureSuccessStatusCode();
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var token = await JsonSerializer.DeserializeAsync<OAuthTokenResponse>(stream, cancellationToken: cancellationToken);
+            if (token is null || string.IsNullOrWhiteSpace(token.AccessToken) || token.ExpiresIn <= 0)
+            {
+                Clear();
+                return null;
+            }
+
+            await SaveAsync(
+                token.AccessToken,
+                string.IsNullOrWhiteSpace(token.RefreshToken) ? refreshToken : token.RefreshToken,
+                token.ExpiresIn,
+                cancellationToken);
+            return token.AccessToken;
+        }
+        finally
+        {
+            refreshGate.Release();
+        }
+    }
+
+    public async Task SaveAsync(
+        string accessToken,
+        string refreshToken,
+        int expiresInSeconds,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expiresInSeconds <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(expiresInSeconds));
+        }
+
         await SecureStorage.Default.SetAsync(AccessTokenKey, accessToken);
+        await SecureStorage.Default.SetAsync(RefreshTokenKey, refreshToken);
         await SecureStorage.Default.SetAsync(
             ExpiresAtKey,
             DateTimeOffset.UtcNow.AddSeconds(expiresInSeconds).ToString("O", CultureInfo.InvariantCulture));
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
-    public static void Clear()
+    public void Clear()
     {
         SecureStorage.Default.Remove(AccessTokenKey);
+        SecureStorage.Default.Remove(RefreshTokenKey);
         SecureStorage.Default.Remove(ExpiresAtKey);
     }
+
+    public void Dispose() => refreshGate.Dispose();
+
+    private static async Task<StoredAccessToken> ReadAccessTokenAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var expiresAtText = await SecureStorage.Default.GetAsync(ExpiresAtKey);
+        var accessToken = await SecureStorage.Default.GetAsync(AccessTokenKey);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        _ = DateTimeOffset.TryParseExact(
+            expiresAtText,
+            "O",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out var expiresAt);
+        return new StoredAccessToken(accessToken, expiresAt);
+    }
+
+    private sealed record StoredAccessToken(string? AccessToken, DateTimeOffset ExpiresAt);
 }
 
-public sealed class MobileAuthenticationService(MobileOptions options, IAccessTokenProvider accessTokenProvider) : IMobileAuthenticationService
+public sealed class MobileAuthenticationService(MobileOptions options, SecureAccessTokenProvider accessTokenProvider) : IMobileAuthenticationService
 {
     public async Task<bool> HasSessionAsync(CancellationToken cancellationToken) =>
         !string.IsNullOrWhiteSpace(await accessTokenProvider.GetAccessTokenAsync(cancellationToken));
@@ -64,14 +162,14 @@ public sealed class MobileAuthenticationService(MobileOptions options, IAccessTo
             "&response_type=code" +
             $"&redirect_uri={Uri.EscapeDataString(options.RedirectUri)}" +
             $"&audience={Uri.EscapeDataString(options.Auth0Audience)}" +
-            "&scope=openid%20profile%20email" +
+            "&scope=openid%20profile%20email%20offline_access" +
             $"&code_challenge={Uri.EscapeDataString(challenge)}" +
             "&code_challenge_method=S256" +
             $"&state={Uri.EscapeDataString(state)}");
 
         var result = await WebAuthenticator.Default.AuthenticateAsync(authorizationUri, callback, cancellationToken);
-        if (!result.Properties.TryGetValue("state", out var returnedState)
-            || !string.Equals(returnedState, state, StringComparison.Ordinal))
+        if (!result.Properties.TryGetValue("state", out var returnedState) ||
+            !string.Equals(returnedState, state, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Auth0 devolvió un estado de autenticación no válido.");
         }
@@ -96,7 +194,7 @@ public sealed class MobileAuthenticationService(MobileOptions options, IAccessTo
         tokenResponse.EnsureSuccessStatusCode();
 
         await using var stream = await tokenResponse.Content.ReadAsStreamAsync(cancellationToken);
-        var token = await JsonSerializer.DeserializeAsync<TokenResponse>(stream, cancellationToken: cancellationToken)
+        var token = await JsonSerializer.DeserializeAsync<OAuthTokenResponse>(stream, cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException("Auth0 devolvió una respuesta de token vacía.");
         if (string.IsNullOrWhiteSpace(token.AccessToken))
         {
@@ -108,18 +206,24 @@ public sealed class MobileAuthenticationService(MobileOptions options, IAccessTo
             throw new InvalidOperationException("Auth0 devolvió expires_in no válido.");
         }
 
-        await SecureAccessTokenProvider.SaveAsync(token.AccessToken, token.ExpiresIn);
+        if (string.IsNullOrWhiteSpace(token.RefreshToken))
+        {
+            throw new InvalidOperationException("Auth0 no devolvió refresh_token. Habilita Offline Access y Refresh Token Rotation para la aplicación Native.");
+        }
+
+        await accessTokenProvider.SaveAsync(token.AccessToken, token.RefreshToken, token.ExpiresIn, cancellationToken);
     }
 
     public Task LogoutAsync()
     {
-        SecureAccessTokenProvider.Clear();
+        accessTokenProvider.Clear();
         return Task.CompletedTask;
     }
 
     private static string Base64Url(byte[] value) => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-
-    private sealed record TokenResponse(
-        [property: System.Text.Json.Serialization.JsonPropertyName("access_token")] string AccessToken,
-        [property: System.Text.Json.Serialization.JsonPropertyName("expires_in")] int ExpiresIn);
 }
+
+internal sealed record OAuthTokenResponse(
+    [property: JsonPropertyName("access_token")] string AccessToken,
+    [property: JsonPropertyName("expires_in")] int ExpiresIn,
+    [property: JsonPropertyName("refresh_token")] string? RefreshToken);

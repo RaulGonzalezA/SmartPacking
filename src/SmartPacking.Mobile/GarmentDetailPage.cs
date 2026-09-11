@@ -5,14 +5,14 @@ using DomainStyle = SmartPacking.Domain.Style;
 
 namespace SmartPacking.Mobile;
 
-public sealed class AddGarmentPage : ContentPage
+public sealed class GarmentDetailPage : ContentPage
 {
     private readonly ISmartPackingClient client;
     private readonly IMobilePhotoService photoService;
+    private readonly PageCancellation pageCancellation = new();
     private readonly Image preview;
     private readonly Label photoInfoLabel;
     private readonly Label statusLabel;
-    private readonly Label suitableForLabel;
     private readonly Entry nameEntry;
     private readonly Entry colorEntry;
     private readonly Entry materialEntry;
@@ -23,60 +23,60 @@ public sealed class AddGarmentPage : ContentPage
     private readonly Slider warmthSlider;
     private readonly Label warmthLabel;
     private readonly Switch waterproofSwitch;
-    private readonly Button analyzeButton;
+    private readonly Switch cleanSwitch;
+    private readonly Switch availableSwitch;
+    private readonly Button captureButton;
+    private readonly Button galleryButton;
     private readonly Button saveButton;
-    private readonly PageCancellation pageCancellation = new();
-    private PreparedPhoto? photo;
-    private Guid? createdClothingItemId;
+    private readonly Button deleteButton;
+    private ClothingItem item;
+    private PreparedPhoto? pendingPhoto;
+    private bool photoLoaded;
     private bool busy;
 
-    public AddGarmentPage(ISmartPackingClient client, IMobilePhotoService photoService)
+    public GarmentDetailPage(ISmartPackingClient client, IMobilePhotoService photoService, ClothingItem item)
     {
         this.client = client;
         this.photoService = photoService;
-        Title = "Añadir prenda";
+        this.item = item;
+        Title = item.Name;
 
-        preview = new Image { HeightRequest = 240, Aspect = Aspect.AspectFit };
-        photoInfoLabel = new Label { Text = "Haz una foto o selecciónala de la galería." };
+        preview = new Image { HeightRequest = 260, Aspect = Aspect.AspectFit };
+        photoInfoLabel = new Label { Text = string.IsNullOrWhiteSpace(item.PhotoUrl) ? "Sin fotografía." : "Cargando fotografía..." };
         statusLabel = new Label();
-        suitableForLabel = new Label { FontSize = 13 };
 
-        var cameraButton = new Button { Text = "Hacer foto", IsEnabled = photoService.CanCapturePhoto };
-        cameraButton.Clicked += CaptureClicked;
-        var galleryButton = new Button { Text = "Galería" };
-        galleryButton.Clicked += PickClicked;
-        analyzeButton = new Button { Text = "Analizar con Gemini", IsEnabled = false };
-        analyzeButton.Clicked += AnalyzeClicked;
-
-        nameEntry = new Entry { Placeholder = "Nombre de la prenda" };
-        colorEntry = new Entry { Placeholder = "Color" };
-        materialEntry = new Entry { Placeholder = "Material (opcional)" };
-        weightEntry = new Entry { Placeholder = "Peso estimado en gramos", Keyboard = Keyboard.Numeric };
+        nameEntry = new Entry { Text = item.Name, Placeholder = "Nombre" };
+        colorEntry = new Entry { Text = item.Color, Placeholder = "Color" };
+        materialEntry = new Entry { Text = item.Material, Placeholder = "Material (opcional)" };
+        weightEntry = new Entry
+        {
+            Text = item.WeightGrams?.ToString(CultureInfo.InvariantCulture),
+            Placeholder = "Peso estimado en gramos",
+            Keyboard = Keyboard.Numeric
+        };
 
         typePicker = CreatePicker("Tipo", GarmentUiMappings.ClothingTypes);
         seasonPicker = CreatePicker("Temporada", GarmentUiMappings.Seasons);
         stylePicker = CreatePicker("Estilo", GarmentUiMappings.Styles);
+        Select(typePicker, GarmentUiMappings.ClothingTypes, item.Type);
+        Select(seasonPicker, GarmentUiMappings.Seasons, item.Season);
+        Select(stylePicker, GarmentUiMappings.Styles, item.Style);
 
-        warmthSlider = new Slider { Minimum = 1, Maximum = 10, Value = 3 };
+        warmthSlider = new Slider { Minimum = 1, Maximum = 10, Value = item.WarmthLevel };
         warmthSlider.ValueChanged += WarmthChanged;
-        warmthLabel = new Label { Text = "Abrigo: 3/10" };
-        waterproofSwitch = new Switch();
+        warmthLabel = new Label { Text = $"Abrigo: {item.WarmthLevel}/10" };
+        waterproofSwitch = new Switch { IsToggled = item.Waterproof };
+        cleanSwitch = new Switch { IsToggled = item.IsClean };
+        availableSwitch = new Switch { IsToggled = item.IsAvailable };
 
-        var waterproofRow = new Grid
-        {
-            ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = GridLength.Star },
-                new ColumnDefinition { Width = GridLength.Auto }
-            }
-        };
-        var waterproofLabel = new Label { Text = "Impermeable", VerticalOptions = LayoutOptions.Center };
-        waterproofRow.Add(waterproofLabel);
-        waterproofRow.Add(waterproofSwitch);
-        Grid.SetColumn(waterproofSwitch, 1);
-
-        saveButton = new Button { Text = "Guardar en el armario" };
+        captureButton = new Button { Text = "Nueva foto", IsEnabled = photoService.CanCapturePhoto };
+        captureButton.Clicked += CaptureClicked;
+        galleryButton = new Button { Text = "Galería" };
+        galleryButton.Clicked += PickClicked;
+        saveButton = new Button { Text = "Guardar cambios" };
         saveButton.Clicked += SaveClicked;
+        deleteButton = new Button { Text = "Eliminar prenda" };
+        deleteButton.Clicked += DeleteClicked;
 
         Content = new ScrollView
         {
@@ -86,11 +86,10 @@ public sealed class AddGarmentPage : ContentPage
                 Spacing = 12,
                 Children =
                 {
-                    new Label { Text = "Nueva prenda", FontSize = 28, FontAttributes = FontAttributes.Bold },
+                    new Label { Text = item.Name, FontSize = 28, FontAttributes = FontAttributes.Bold },
                     preview,
                     photoInfoLabel,
-                    new HorizontalStackLayout { Spacing = 10, Children = { cameraButton, galleryButton } },
-                    analyzeButton,
+                    new HorizontalStackLayout { Spacing = 10, Children = { captureButton, galleryButton } },
                     statusLabel,
                     nameEntry,
                     typePicker,
@@ -100,25 +99,59 @@ public sealed class AddGarmentPage : ContentPage
                     stylePicker,
                     warmthLabel,
                     warmthSlider,
-                    waterproofRow,
+                    CreateSwitchRow("Impermeable", waterproofSwitch),
+                    CreateSwitchRow("Limpia", cleanSwitch),
+                    CreateSwitchRow("Disponible", availableSwitch),
                     weightEntry,
-                    suitableForLabel,
-                    saveButton
+                    saveButton,
+                    deleteButton
                 }
             }
         };
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
         pageCancellation.Reset();
+        if (!photoLoaded && !string.IsNullOrWhiteSpace(item.PhotoUrl))
+        {
+            await LoadPhotoAsync(pageCancellation.Token);
+        }
     }
 
     protected override void OnDisappearing()
     {
         pageCancellation.Release();
         base.OnDisappearing();
+    }
+
+    private async Task LoadPhotoAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var bytes = await client.GetClothingPhotoAsync(item.Id, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            photoLoaded = true;
+            if (bytes is null)
+            {
+                photoInfoLabel.Text = "Sin fotografía.";
+                return;
+            }
+
+            preview.Source = ImageSource.FromStream(() => new MemoryStream(bytes, writable: false));
+            photoInfoLabel.Text = "Fotografía actual.";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            statusLabel.Text = "Carga de fotografía cancelada.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            photoLoaded = true;
+            photoInfoLabel.Text = "No se pudo cargar la fotografía.";
+            statusLabel.Text = exception.Message;
+        }
     }
 
     private async void CaptureClicked(object? sender, EventArgs e)
@@ -132,10 +165,10 @@ public sealed class AddGarmentPage : ContentPage
         try
         {
             SetBusy(true, "Preparando cámara...");
-            var captured = await photoService.CaptureAsync(cancellationToken);
-            if (captured is not null)
+            var photo = await photoService.CaptureAsync(cancellationToken);
+            if (photo is not null)
             {
-                SetPhoto(captured);
+                SetPhoto(photo);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -163,10 +196,10 @@ public sealed class AddGarmentPage : ContentPage
         try
         {
             SetBusy(true, "Preparando imagen...");
-            var selected = await photoService.PickAsync(cancellationToken);
-            if (selected is not null)
+            var photo = await photoService.PickAsync(cancellationToken);
+            if (photo is not null)
             {
-                SetPhoto(selected);
+                SetPhoto(photo);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -183,74 +216,39 @@ public sealed class AddGarmentPage : ContentPage
         }
     }
 
-    private async void AnalyzeClicked(object? sender, EventArgs e)
-    {
-        if (busy || photo is null || createdClothingItemId is not null)
-        {
-            return;
-        }
-
-        var cancellationToken = pageCancellation.Token;
-        try
-        {
-            SetBusy(true, "Gemini está analizando la prenda...");
-            var suggestion = await client.RecognizeGarmentAsync(photo.Content, photo.FileName, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            ApplySuggestion(suggestion);
-            statusLabel.Text = "Propuesta aplicada. Revísala antes de guardar.";
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            statusLabel.Text = "Análisis cancelado.";
-        }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException)
-        {
-            statusLabel.Text = $"No se pudo analizar la prenda: {exception.Message}";
-        }
-        finally
-        {
-            SetBusy(false);
-        }
-    }
-
     private async void SaveClicked(object? sender, EventArgs e)
     {
-        if (busy)
+        if (busy || !TryBuildRequest(out var request, out var validationMessage))
         {
-            return;
-        }
+            if (!busy)
+            {
+                statusLabel.Text = validationMessage;
+            }
 
-        CreateClothingItemRequest? request = null;
-        if (createdClothingItemId is null && !TryBuildRequest(out request, out var validationMessage))
-        {
-            statusLabel.Text = validationMessage;
             return;
         }
 
         var cancellationToken = pageCancellation.Token;
         try
         {
-            SetBusy(true, createdClothingItemId is null ? "Guardando prenda..." : "Reintentando fotografía...");
-            if (createdClothingItemId is null)
-            {
-                var created = await client.CreateClothingItemAsync(request!, cancellationToken);
-                createdClothingItemId = created.Id;
-                LockCreatedItemFields();
-            }
+            SetBusy(true, "Guardando cambios...");
+            item = await client.UpdateClothingItemAsync(item.Id, request, cancellationToken);
+            Title = item.Name;
 
-            if (photo is not null)
+            if (pendingPhoto is not null)
             {
                 statusLabel.Text = "Subiendo fotografía...";
                 await client.UploadClothingPhotoAsync(
-                    createdClothingItemId.Value,
-                    photo.Content,
-                    photo.FileName,
+                    item.Id,
+                    pendingPhoto.Content,
+                    pendingPhoto.FileName,
                     cancellationToken,
-                    photo.ThumbnailContent);
+                    pendingPhoto.ThumbnailContent);
+                pendingPhoto = null;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            statusLabel.Text = "Prenda guardada.";
+            statusLabel.Text = "Cambios guardados.";
             await Navigation.PopAsync();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -259,15 +257,9 @@ public sealed class AddGarmentPage : ContentPage
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
-            if (createdClothingItemId is null)
-            {
-                statusLabel.Text = $"No se pudo guardar la prenda: {exception.Message}";
-            }
-            else
-            {
-                saveButton.Text = "Reintentar subir foto";
-                statusLabel.Text = "La prenda se guardó, pero la fotografía no pudo subirse. Pulsa de nuevo para reintentar solo la foto.";
-            }
+            statusLabel.Text = pendingPhoto is null
+                ? $"No se pudieron guardar los cambios: {exception.Message}"
+                : "Los datos de la prenda pueden haberse guardado, pero la fotografía sigue pendiente. Vuelve a pulsar Guardar para reintentar.";
         }
         finally
         {
@@ -275,36 +267,51 @@ public sealed class AddGarmentPage : ContentPage
         }
     }
 
-    private void SetPhoto(PreparedPhoto preparedPhoto)
+    private async void DeleteClicked(object? sender, EventArgs e)
     {
-        photo = preparedPhoto;
-        preview.Source = ImageSource.FromStream(() => new MemoryStream(preparedPhoto.Content, writable: false));
-        photoInfoLabel.Text = $"Foto optimizada: {preparedPhoto.Width}×{preparedPhoto.Height} · {preparedPhoto.SizeKilobytes} KB · miniatura {preparedPhoto.ThumbnailSizeKilobytes} KB";
-        analyzeButton.IsEnabled = createdClothingItemId is null;
-        statusLabel.Text = createdClothingItemId is null ? "Foto lista para analizar." : "Foto lista para reintentar la subida.";
-    }
-
-    private void ApplySuggestion(SmartPacking.Application.GarmentRecognitionSuggestion suggestion)
-    {
-        var type = GarmentUiMappings.ParseCategory(suggestion.Category);
-        var season = GarmentUiMappings.ParseSeason(suggestion.Seasons);
-        var style = GarmentUiMappings.ParseStyle(suggestion.Style);
-
-        Select(typePicker, GarmentUiMappings.ClothingTypes, type);
-        Select(seasonPicker, GarmentUiMappings.Seasons, season);
-        Select(stylePicker, GarmentUiMappings.Styles, style);
-        colorEntry.Text = suggestion.Color;
-        materialEntry.Text = suggestion.Material;
-        weightEntry.Text = suggestion.EstimatedWeightGrams.ToString(CultureInfo.InvariantCulture);
-        warmthSlider.Value = GarmentUiMappings.EstimateWarmth(type, season);
-        if (string.IsNullOrWhiteSpace(nameEntry.Text))
+        if (busy)
         {
-            nameEntry.Text = $"{suggestion.Category} {suggestion.Color}";
+            return;
         }
 
-        suitableForLabel.Text = suggestion.SuitableFor.Count == 0
-            ? string.Empty
-            : $"Adecuada para: {string.Join(", ", suggestion.SuitableFor)}";
+        var confirmed = await DisplayAlertAsync(
+            "Eliminar prenda",
+            $"¿Quieres enviar '{item.Name}' a la papelera?",
+            "Eliminar",
+            "Cancelar");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        var cancellationToken = pageCancellation.Token;
+        try
+        {
+            SetBusy(true, "Eliminando prenda...");
+            await client.DeleteClothingItemAsync(item.Id, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            await Navigation.PopAsync();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            statusLabel.Text = "Eliminación cancelada.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            statusLabel.Text = $"No se pudo eliminar la prenda: {exception.Message}";
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private void SetPhoto(PreparedPhoto photo)
+    {
+        pendingPhoto = photo;
+        preview.Source = ImageSource.FromStream(() => new MemoryStream(photo.Content, writable: false));
+        photoInfoLabel.Text = $"Nueva foto: {photo.Width}×{photo.Height} · {photo.SizeKilobytes} KB · miniatura {photo.ThumbnailSizeKilobytes} KB";
+        statusLabel.Text = "La nueva fotografía se subirá al guardar.";
     }
 
     private bool TryBuildRequest(out CreateClothingItemRequest request, out string validationMessage)
@@ -347,7 +354,12 @@ public sealed class AddGarmentPage : ContentPage
             waterproofSwitch.IsToggled,
             Selected(stylePicker, DomainStyle.Casual),
             weight,
-            Material: materialEntry.Text?.Trim());
+            cleanSwitch.IsToggled,
+            availableSwitch.IsToggled,
+            item.PreferenceScore,
+            item.OwnerProfileId,
+            materialEntry.Text?.Trim(),
+            item.CombinesWith);
         validationMessage = string.Empty;
         return true;
     }
@@ -359,25 +371,29 @@ public sealed class AddGarmentPage : ContentPage
     {
         busy = value;
         saveButton.IsEnabled = !value;
-        analyzeButton.IsEnabled = !value && photo is not null && createdClothingItemId is null;
+        deleteButton.IsEnabled = !value;
+        captureButton.IsEnabled = !value && photoService.CanCapturePhoto;
+        galleryButton.IsEnabled = !value;
         if (!string.IsNullOrWhiteSpace(message))
         {
             statusLabel.Text = message;
         }
     }
 
-    private void LockCreatedItemFields()
+    private static Grid CreateSwitchRow(string text, Switch toggle)
     {
-        nameEntry.IsEnabled = false;
-        colorEntry.IsEnabled = false;
-        materialEntry.IsEnabled = false;
-        weightEntry.IsEnabled = false;
-        typePicker.IsEnabled = false;
-        seasonPicker.IsEnabled = false;
-        stylePicker.IsEnabled = false;
-        warmthSlider.IsEnabled = false;
-        waterproofSwitch.IsEnabled = false;
-        analyzeButton.IsEnabled = false;
+        var row = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto }
+            }
+        };
+        row.Add(new Label { Text = text, VerticalOptions = LayoutOptions.Center });
+        row.Add(toggle);
+        Grid.SetColumn(toggle, 1);
+        return row;
     }
 
     private static Picker CreatePicker<T>(string title, IReadOnlyList<PickerOption<T>> options)

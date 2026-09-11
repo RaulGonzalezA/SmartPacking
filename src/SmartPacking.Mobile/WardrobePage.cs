@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Microsoft.Extensions.DependencyInjection;
 using SmartPacking.Client;
 using SmartPacking.Domain;
@@ -6,12 +7,16 @@ namespace SmartPacking.Mobile;
 
 public sealed class WardrobePage : ContentPage
 {
+    private const int PageSize = 20;
     private readonly ISmartPackingClient client;
     private readonly IServiceProvider services;
     private readonly CollectionView wardrobeView;
     private readonly Label statusLabel;
     private readonly PageCancellation pageCancellation = new();
+    private readonly ObservableCollection<WardrobeItemViewModel> items = [];
     private bool loading;
+    private bool hasMore = true;
+    private int currentPage;
 
     public WardrobePage(ISmartPackingClient client, IServiceProvider services)
     {
@@ -27,11 +32,15 @@ public sealed class WardrobePage : ContentPage
         statusLabel = new Label { Text = "Cargando armario..." };
         wardrobeView = new CollectionView
         {
-            SelectionMode = SelectionMode.None,
+            SelectionMode = SelectionMode.Single,
             ItemsLayout = new LinearItemsLayout(ItemsLayoutOrientation.Vertical) { ItemSpacing = 12 },
+            ItemsSource = items,
             EmptyView = new Label { Text = "Todavía no tienes prendas en el armario.", Margin = new Thickness(0, 24) },
-            ItemTemplate = new DataTemplate(CreateGarmentCard)
+            ItemTemplate = new DataTemplate(CreateGarmentCard),
+            RemainingItemsThreshold = 4
         };
+        wardrobeView.RemainingItemsThresholdReached += RemainingItemsThresholdReached;
+        wardrobeView.SelectionChanged += WardrobeSelectionChanged;
 
         var title = new Label
         {
@@ -77,7 +86,7 @@ public sealed class WardrobePage : ContentPage
     {
         base.OnAppearing();
         pageCancellation.Reset();
-        await LoadAsync(pageCancellation.Token);
+        await LoadNextPageAsync(reset: true, pageCancellation.Token);
     }
 
     protected override void OnDisappearing()
@@ -89,36 +98,65 @@ public sealed class WardrobePage : ContentPage
     private async void AddGarmentClicked(object? sender, EventArgs e) =>
         await Navigation.PushAsync(services.GetRequiredService<AddGarmentPage>());
 
-    private async void RefreshClicked(object? sender, EventArgs e) => await LoadAsync(pageCancellation.Token);
+    private async void RefreshClicked(object? sender, EventArgs e) =>
+        await LoadNextPageAsync(reset: true, pageCancellation.Token);
 
-    private async Task LoadAsync(CancellationToken cancellationToken)
+    private async void RemainingItemsThresholdReached(object? sender, EventArgs e) =>
+        await LoadNextPageAsync(reset: false, pageCancellation.Token);
+
+    private async void WardrobeSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (loading)
+        if (e.CurrentSelection.FirstOrDefault() is not WardrobeItemViewModel selected)
+        {
+            return;
+        }
+
+        wardrobeView.SelectedItem = null;
+        var photoService = services.GetRequiredService<IMobilePhotoService>();
+        await Navigation.PushAsync(new GarmentDetailPage(client, photoService, selected.Item));
+    }
+
+    private async Task LoadNextPageAsync(bool reset, CancellationToken cancellationToken)
+    {
+        if (loading || (!reset && !hasMore))
         {
             return;
         }
 
         loading = true;
-        statusLabel.Text = "Cargando armario...";
+        if (reset)
+        {
+            items.Clear();
+            currentPage = 0;
+            hasMore = true;
+        }
+
+        statusLabel.Text = currentPage == 0 ? "Cargando armario..." : "Cargando más prendas...";
         try
         {
-            var wardrobe = await client.GetWardrobeAsync(cancellationToken);
+            var nextPage = currentPage + 1;
+            var page = await client.GetWardrobePageAsync(nextPage, PageSize, cancellationToken);
             using var gate = new SemaphoreSlim(4);
-            var models = await Task.WhenAll(wardrobe
-                .OrderBy(item => item.Type)
-                .ThenBy(item => item.Name)
-                .Select(item => CreateViewModelAsync(item, gate, cancellationToken)));
+            var models = await Task.WhenAll(page.Items.Select(item => CreateViewModelAsync(item, gate, cancellationToken)));
             cancellationToken.ThrowIfCancellationRequested();
-            wardrobeView.ItemsSource = models;
-            statusLabel.Text = $"{models.Length} prendas";
+
+            foreach (var model in models)
+            {
+                items.Add(model);
+            }
+
+            currentPage = nextPage;
+            hasMore = page.HasMore;
+            statusLabel.Text = hasMore
+                ? $"{items.Count} prendas cargadas · sigue desplazándote para cargar más"
+                : $"{items.Count} prendas";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return;
+            statusLabel.Text = "Carga cancelada.";
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
-            wardrobeView.ItemsSource = null;
             statusLabel.Text = $"No se pudo cargar el armario: {exception.Message}";
         }
         finally
@@ -127,7 +165,10 @@ public sealed class WardrobePage : ContentPage
         }
     }
 
-    private async Task<WardrobeItemViewModel> CreateViewModelAsync(ClothingItem item, SemaphoreSlim gate, CancellationToken cancellationToken)
+    private async Task<WardrobeItemViewModel> CreateViewModelAsync(
+        ClothingItem item,
+        SemaphoreSlim gate,
+        CancellationToken cancellationToken)
     {
         byte[]? photoBytes = null;
         if (!string.IsNullOrWhiteSpace(item.PhotoUrl))
@@ -137,7 +178,7 @@ public sealed class WardrobePage : ContentPage
             {
                 try
                 {
-                    photoBytes = await client.GetClothingPhotoAsync(item.Id, cancellationToken);
+                    photoBytes = await client.GetClothingThumbnailAsync(item.Id, cancellationToken);
                 }
                 catch (HttpRequestException)
                 {
@@ -161,8 +202,8 @@ public sealed class WardrobePage : ContentPage
     {
         var image = new Image
         {
-            HeightRequest = 120,
-            WidthRequest = 120,
+            HeightRequest = 96,
+            WidthRequest = 96,
             Aspect = Aspect.AspectFill,
             HorizontalOptions = LayoutOptions.Start
         };
@@ -188,7 +229,7 @@ public sealed class WardrobePage : ContentPage
             ColumnSpacing = 14,
             ColumnDefinitions =
             {
-                new ColumnDefinition { Width = 130 },
+                new ColumnDefinition { Width = 106 },
                 new ColumnDefinition { Width = GridLength.Star }
             }
         };
@@ -202,6 +243,7 @@ public sealed class WardrobePage : ContentPage
     {
         public WardrobeItemViewModel(ClothingItem item, byte[]? photoBytes)
         {
+            Item = item;
             Name = item.Name;
             Description = $"{GarmentUiMappings.GetLabel(item.Type)} · {item.Color} · {GarmentUiMappings.GetLabel(item.Style)}" +
                 (string.IsNullOrWhiteSpace(item.Material) ? string.Empty : $" · {item.Material}");
@@ -211,6 +253,7 @@ public sealed class WardrobePage : ContentPage
                 : ImageSource.FromStream(() => new MemoryStream(photoBytes, writable: false));
         }
 
+        public ClothingItem Item { get; }
         public string Name { get; }
         public string Description { get; }
         public string Status { get; }

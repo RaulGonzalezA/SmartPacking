@@ -30,15 +30,25 @@ public sealed class SmartPackingClient(HttpClient httpClient) : ISmartPackingCli
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ClothingItem>> GetWardrobeAsync(CancellationToken cancellationToken) =>
+        (await GetWardrobePageAsync(1, 100, cancellationToken)).Items;
+
+    public async Task<WardrobePageResult> GetWardrobePageAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
-        var result = await httpClient.GetFromJsonAsync<ApiResult<ClothingItemDto[]>>("api/wardrobe?page=1&pageSize=100", cancellationToken);
-        return result?.Data.Select(ToClothingItem).ToArray() ?? [];
+        ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageSize, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, 100);
+
+        var result = await httpClient.GetFromJsonAsync<ApiResult<ClothingItemDto[]>>(
+            $"api/wardrobe?page={page}&pageSize={pageSize}",
+            cancellationToken);
+        var items = result?.Data.Select(ToClothingItem).ToArray() ?? [];
+        return new WardrobePageResult(items, page, pageSize, items.Length == pageSize);
     }
 
     public async Task<GarmentRecognitionSuggestion> RecognizeGarmentAsync(byte[] jpegPhoto, string fileName, CancellationToken cancellationToken)
     {
-        using var content = CreatePhotoContent(jpegPhoto, fileName);
+        using var content = CreatePhotoContent(jpegPhoto, fileName, null);
         using var response = await httpClient.PostAsync("api/wardrobe/recognition", content, cancellationToken);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<GarmentRecognitionSuggestion>(cancellationToken)
@@ -47,38 +57,52 @@ public sealed class SmartPackingClient(HttpClient httpClient) : ISmartPackingCli
 
     public async Task<ClothingItem> CreateClothingItemAsync(CreateClothingItemRequest request, CancellationToken cancellationToken)
     {
-        var payload = new UpsertClothingItemDto(
-            request.Name,
-            request.Type,
-            request.Season,
-            request.Color,
-            request.WarmthLevel,
-            request.Waterproof,
-            request.Style,
-            request.WeightGrams,
-            request.IsClean,
-            request.IsAvailable,
-            request.PreferenceScore,
-            [],
-            request.OwnerProfileId,
-            request.Material);
-        using var response = await httpClient.PostAsJsonAsync("api/wardrobe", payload, cancellationToken);
+        using var response = await httpClient.PostAsJsonAsync("api/wardrobe", ToPayload(request), cancellationToken);
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<ApiResult<ClothingItemDto>>(cancellationToken)
             ?? throw new InvalidOperationException("La API no devolvió la prenda creada.");
         return ToClothingItem(result.Data);
     }
 
-    public async Task UploadClothingPhotoAsync(Guid clothingItemId, byte[] jpegPhoto, string fileName, CancellationToken cancellationToken)
+    public async Task<ClothingItem> UpdateClothingItemAsync(
+        Guid clothingItemId,
+        CreateClothingItemRequest request,
+        CancellationToken cancellationToken)
     {
-        using var content = CreatePhotoContent(jpegPhoto, fileName);
+        using var response = await httpClient.PutAsJsonAsync($"api/wardrobe/{clothingItemId}", ToPayload(request), cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<ApiResult<ClothingItemDto>>(cancellationToken)
+            ?? throw new InvalidOperationException("La API no devolvió la prenda actualizada.");
+        return ToClothingItem(result.Data);
+    }
+
+    public async Task DeleteClothingItemAsync(Guid clothingItemId, CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.DeleteAsync($"api/wardrobe/{clothingItemId}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UploadClothingPhotoAsync(
+        Guid clothingItemId,
+        byte[] jpegPhoto,
+        string fileName,
+        CancellationToken cancellationToken,
+        byte[]? thumbnailJpeg = null)
+    {
+        using var content = CreatePhotoContent(jpegPhoto, fileName, thumbnailJpeg);
         using var response = await httpClient.PostAsync($"api/wardrobe/{clothingItemId}/photo", content, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task<byte[]?> GetClothingPhotoAsync(Guid clothingItemId, CancellationToken cancellationToken)
+    public Task<byte[]?> GetClothingPhotoAsync(Guid clothingItemId, CancellationToken cancellationToken) =>
+        GetPhotoAsync($"api/wardrobe/{clothingItemId}/photo", cancellationToken);
+
+    public Task<byte[]?> GetClothingThumbnailAsync(Guid clothingItemId, CancellationToken cancellationToken) =>
+        GetPhotoAsync($"api/wardrobe/{clothingItemId}/thumbnail", cancellationToken);
+
+    private async Task<byte[]?> GetPhotoAsync(string uri, CancellationToken cancellationToken)
     {
-        using var response = await httpClient.GetAsync($"api/wardrobe/{clothingItemId}/photo", cancellationToken);
+        using var response = await httpClient.GetAsync(uri, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
@@ -88,14 +112,38 @@ public sealed class SmartPackingClient(HttpClient httpClient) : ISmartPackingCli
         return await response.Content.ReadAsByteArrayAsync(cancellationToken);
     }
 
-    private static MultipartFormDataContent CreatePhotoContent(byte[] jpegPhoto, string fileName)
+    private static MultipartFormDataContent CreatePhotoContent(byte[] jpegPhoto, string fileName, byte[]? thumbnailJpeg)
     {
         var content = new MultipartFormDataContent();
         var photoContent = new ByteArrayContent(jpegPhoto);
         photoContent.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
         content.Add(photoContent, "photo", string.IsNullOrWhiteSpace(fileName) ? "garment.jpg" : fileName);
+
+        if (thumbnailJpeg is not null)
+        {
+            var thumbnailContent = new ByteArrayContent(thumbnailJpeg);
+            thumbnailContent.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+            content.Add(thumbnailContent, "thumbnail", "thumbnail.jpg");
+        }
+
         return content;
     }
+
+    private static UpsertClothingItemDto ToPayload(CreateClothingItemRequest request) => new(
+        request.Name,
+        request.Type,
+        request.Season,
+        request.Color,
+        request.WarmthLevel,
+        request.Waterproof,
+        request.Style,
+        request.WeightGrams,
+        request.IsClean,
+        request.IsAvailable,
+        request.PreferenceScore,
+        request.CombinesWith ?? [],
+        request.OwnerProfileId,
+        request.Material);
 
     private static ClothingItem ToClothingItem(ClothingItemDto item) => new(
         item.Id,
