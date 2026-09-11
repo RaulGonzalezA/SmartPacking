@@ -117,7 +117,8 @@ public sealed class SmartPackingClientTests
         string? multipartBody = null;
         using var handler = new CallbackHandler(async (request, cancellationToken) =>
         {
-            var bytes = await request.Content.ReadAsByteArrayAsync(cancellationToken);
+            var content = request.Content ?? throw new InvalidOperationException("Expected multipart request content.");
+            var bytes = await content.ReadAsByteArrayAsync(cancellationToken);
             multipartBody = Encoding.Latin1.GetString(bytes);
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
