@@ -39,6 +39,7 @@ public static class InfrastructureServiceCollectionExtensions
             }
         });
         services.AddScoped<ISmartPackingStore, EfSmartPackingStore>();
+        services.AddScoped<IClothingItemLookup, EfClothingItemLookup>();
         services.AddScoped<IGarmentRecognitionUsageService, GarmentRecognitionUsageService>();
 
         return services;

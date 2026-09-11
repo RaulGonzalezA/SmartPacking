@@ -15,11 +15,12 @@ jobs:
   validate:
     name: Validate .NET 10
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       DOTNET_NOLOGO: true
       NUGET_XMLDOC_MODE: skip
       DOTNET_CLI_TELEMETRY_OPTOUT: true
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +29,9 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
+
+      - name: Restore MAUI Android workload
+        run: dotnet workload restore src/SmartPacking.Mobile/SmartPacking.Mobile.csproj
 
       - name: Restore
         run: dotnet restore SmartPacking.slnx

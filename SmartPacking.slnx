@@ -7,17 +7,20 @@
   <Folder Name="/src/">
     <Project Path="src/SmartPacking.Api/SmartPacking.Api.csproj" />
     <Project Path="src/SmartPacking.Application/SmartPacking.Application.csproj" />
+    <Project Path="src/SmartPacking.Client/SmartPacking.Client.csproj" />
     <Project Path="src/SmartPacking.Contracts/SmartPacking.Contracts.csproj" />
     <Project Path="src/SmartPacking.Domain/SmartPacking.Domain.csproj" />
     <Project Path="src/SmartPacking.Infrastructure.PostgreSql/SmartPacking.Infrastructure.PostgreSql.csproj" />
     <Project Path="src/SmartPacking.Infrastructure.SqlServer/SmartPacking.Infrastructure.SqlServer.csproj" />
     <Project Path="src/SmartPacking.Infrastructure/SmartPacking.Infrastructure.csproj" />
+    <Project Path="src/SmartPacking.Mobile/SmartPacking.Mobile.csproj" />
     <Project Path="src/SmartPacking.Web/SmartPacking.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SmartPacking.Api.IntegrationTests/SmartPacking.Api.IntegrationTests.csproj" />
     <Project Path="tests/SmartPacking.Api.UnitTests/SmartPacking.Api.UnitTests.csproj" />
     <Project Path="tests/SmartPacking.Application.Tests/SmartPacking.Application.Tests.csproj" />
+    <Project Path="tests/SmartPacking.Client.Tests/SmartPacking.Client.Tests.csproj" />
     <Project Path="tests/SmartPacking.Web.Tests/SmartPacking.Web.Tests.csproj" />
   </Folder>
 </Solution>
